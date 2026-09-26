@@ -1,11 +1,151 @@
-import type { ProjectProfile } from "../core/types.js";
+import path from "node:path";
+import type { ApiEndpoint, ProjectProfile } from "../core/types.js";
+import { detectCli } from "./cli.js";
+import { isAnalyzableSource, ScanContext } from "./context.js";
+import { detectDatabase } from "./database.js";
+import { detectAgentConfig, detectDocs, readmeSummary } from "./docs.js";
+import { detectEnvVars } from "./env.js";
+import { detectFrameworks } from "./frameworks.js";
+import { readGitInfo } from "./git.js";
+import { selectKeyFiles } from "./keyfiles.js";
+import { detectLanguages } from "./languages.js";
+import { choosePackageManager, parseManifests } from "./manifests.js";
+import { extractOpenApi } from "./openapi.js";
+import { dedupeEndpoints, detectRoutes } from "./routes/index.js";
+import { renderTree } from "./tree.js";
+import { walkProject } from "./walk.js";
 
 export interface ScanOptions {
   maxFiles?: number; // default 20000; stop walking after this many files and set stats.truncated
   onProgress?: (message: string) => void;
 }
 
+/** Caps on how much source we read for route/env/model detection. */
+const MAX_SOURCE_FILES = 6000;
+const MAX_SOURCE_BYTES = 48 * 1024 * 1024;
+
 /** Deterministically scan a repository. No network access. */
 export async function scanProject(root: string, opts: ScanOptions = {}): Promise<ProjectProfile> {
-  throw new Error("scanProject: not implemented");
+  const started = Date.now();
+  const absRoot = path.resolve(root);
+  const progress = (msg: string) => {
+    try {
+      opts.onProgress?.(msg);
+    } catch {
+      /* progress callbacks must not break the scan */
+    }
+  };
+  const maxFiles = opts.maxFiles ?? 20000;
+
+  progress("Walking files");
+  const walk = await walkProject(absRoot, maxFiles);
+  progress(`Found ${walk.files.length} files in ${walk.dirs.length} directories${walk.truncated ? " (truncated)" : ""}`);
+  const ctx = new ScanContext(absRoot, walk);
+
+  progress("Reading manifests");
+  const manifests = await parseManifests(ctx);
+
+  progress("Detecting languages");
+  const { languages, primaryLanguage } = detectLanguages(walk.files);
+
+  progress("Reading source files");
+  const sourceList: string[] = [];
+  let bytes = 0;
+  for (const f of walk.files) {
+    if (!isAnalyzableSource(f)) continue;
+    if (sourceList.length >= MAX_SOURCE_FILES || bytes + f.size > MAX_SOURCE_BYTES) break;
+    sourceList.push(f.path);
+    bytes += f.size;
+  }
+  const sources = await ctx.readMany(sourceList);
+
+  progress("Detecting frameworks");
+  const frameworks = detectFrameworks(manifests.dependencies, ctx, manifests.hints);
+  for (const fw of frameworksFromImports(sources)) if (!frameworks.includes(fw)) frameworks.push(fw);
+
+  progress("Looking for OpenAPI specs");
+  const openapi = await extractOpenApi(ctx);
+  if (openapi.specs.length) progress(`Parsed ${openapi.endpoints.length} endpoints from ${openapi.specs.length} OpenAPI spec(s)`);
+
+  progress(`Detecting routes in ${sources.size} source files`);
+  const codeRoutes = detectRoutes(sources);
+  const apis: ApiEndpoint[] = dedupeEndpoints([...openapi.endpoints, ...codeRoutes]);
+  progress(`Found ${apis.length} API endpoints`);
+
+  progress("Collecting environment variables");
+  const envVars = await detectEnvVars(ctx, sources);
+
+  progress("Detecting database");
+  const database = await detectDatabase(ctx, sources, manifests.dependencies);
+
+  progress("Reading docs");
+  const docs = await detectDocs(ctx);
+  const existingAgentConfig = detectAgentConfig(absRoot);
+  const cli = detectCli(ctx, manifests, manifests.dependencies, sources);
+  const git = await readGitInfo(absRoot);
+
+  const name = manifests.name ?? path.basename(absRoot);
+  const tree = renderTree(path.basename(absRoot) || name, walk);
+
+  progress("Selecting key files");
+  const keyFiles = await selectKeyFiles(ctx, {
+    manifests,
+    apis,
+    codeRoutes,
+    openapiSpecs: openapi.specs,
+    schemaFiles: database?.schemaFiles ?? [],
+    frameworks,
+  });
+
+  const profile: ProjectProfile = {
+    root: absRoot,
+    name,
+    languages,
+    frameworks,
+    scripts: manifests.scripts,
+    apis,
+    openapiSpecs: openapi.specs,
+    envVars,
+    dependencies: manifests.dependencies,
+    docs,
+    existingAgentConfig,
+    tree,
+    keyFiles,
+    stats: { files: walk.files.length, dirs: walk.dirs.length, truncated: walk.truncated, scanMs: 0 },
+  };
+  const description = manifests.description ?? readmeSummary(docs.readme);
+  if (description) profile.description = description;
+  if (primaryLanguage) profile.primaryLanguage = primaryLanguage;
+  const pm = choosePackageManager(manifests.packageManagers, primaryLanguage);
+  if (pm) profile.packageManager = pm;
+  if (cli) profile.cli = cli;
+  if (database) profile.database = database;
+  if (git) profile.git = git;
+  profile.stats.scanMs = Date.now() - started;
+  progress(`Scan complete in ${profile.stats.scanMs}ms`);
+  return profile;
 }
+
+/** Framework hints from imports, for projects without (parseable) manifests. */
+function frameworksFromImports(sources: Map<string, string>): string[] {
+  const found = new Set<string>();
+  const rules: [string, RegExp, RegExp][] = [
+    ["fastapi", /\.py$/, /^\s*from\s+fastapi\s+import|^\s*import\s+fastapi/m],
+    ["flask", /\.py$/, /^\s*from\s+flask\s+import/m],
+    ["django", /\.py$/, /^\s*from\s+django\./m],
+    ["starlette", /\.py$/, /^\s*from\s+starlette[\s.]/m],
+    ["gin", /\.go$/, /"github\.com\/gin-gonic\/gin"/],
+    ["echo", /\.go$/, /"github\.com\/labstack\/echo/],
+    ["fiber", /\.go$/, /"github\.com\/gofiber\/fiber/],
+    ["chi", /\.go$/, /"github\.com\/go-chi\/chi/],
+    ["sinatra", /\.rb$/, /require\s+['"]sinatra/],
+  ];
+  let checked = 0;
+  for (const [file, text] of sources) {
+    if (checked++ > 3000) break;
+    for (const [fw, fileRe, re] of rules) if (!found.has(fw) && fileRe.test(file) && re.test(text)) found.add(fw);
+  }
+  if (found.has("fastapi")) found.delete("starlette");
+  return [...found];
+}
+

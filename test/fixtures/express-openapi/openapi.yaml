@@ -1,0 +1,194 @@
+openapi: 3.0.3
+info:
+  title: Acme Orders API
+  version: 1.4.0
+  description: Create, inspect and cancel orders.
+servers:
+  - url: http://localhost:3000
+security:
+  - bearerAuth: []
+tags:
+  - name: orders
+  - name: customers
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: OK
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List orders
+      tags: [orders]
+      parameters:
+        - name: status
+          in: query
+          description: Filter by order status
+          schema:
+            $ref: "#/components/schemas/OrderStatus"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+    post:
+      operationId: createOrder
+      summary: Create an order
+      tags: [orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderCreate"
+      responses:
+        "201":
+          description: Created
+  /orders/{id}:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    get:
+      operationId: getOrder
+      summary: Get an order
+      tags: [orders]
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteOrder
+      summary: Permanently delete an order
+      description: Irreversible. Removes the order and its line items.
+      tags: [orders]
+      responses:
+        "204":
+          description: Deleted
+  /orders/{id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/OrderId"
+    post:
+      operationId: cancelOrder
+      summary: Cancel an order
+      tags: [orders]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  description: Shown to the customer
+                refund:
+                  type: boolean
+                  default: true
+      responses:
+        "200":
+          description: Cancelled
+  /customers:
+    get:
+      operationId: listCustomers
+      summary: List customers
+      tags: [customers]
+      parameters:
+        - name: email
+          in: query
+          schema:
+            type: string
+            format: email
+      responses:
+        "200":
+          description: Customers
+  /customers/{customerId}:
+    get:
+      operationId: getCustomer
+      summary: Get a customer
+      tags: [customers]
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The customer
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    OrderId:
+      name: id
+      in: path
+      required: true
+      description: Order id
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      description: Max results (default 20)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+  schemas:
+    OrderStatus:
+      type: string
+      enum: [pending, paid, shipped, cancelled]
+    LineItem:
+      type: object
+      required: [sku, quantity]
+      properties:
+        sku:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+    OrderCreate:
+      type: object
+      required: [customerId, items]
+      properties:
+        customerId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItem"
+        note:
+          type: string
+    Order:
+      allOf:
+        - $ref: "#/components/schemas/OrderCreate"
+        - type: object
+          properties:
+            id:
+              type: string
+            status:
+              $ref: "#/components/schemas/OrderStatus"
+            parent:
+              $ref: "#/components/schemas/Order"

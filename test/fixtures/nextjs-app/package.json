@@ -1,0 +1,30 @@
+{
+  "name": "notes-web",
+  "version": "0.1.0",
+  "description": "Collaborative notes app built on Next.js.",
+  "private": true,
+  "packageManager": "pnpm@9.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "db:push": "drizzle-kit push",
+    "deploy": "vercel deploy --prod"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.31.0",
+    "next": "14.2.3",
+    "postgres": "^3.4.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "drizzle-kit": "^0.22.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
