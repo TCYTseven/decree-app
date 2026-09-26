@@ -7,10 +7,10 @@ import { runAgent } from "../runtime/index.js";
 import { MissingApiKeyError } from "../llm/client.js";
 import { banner } from "../ui/banner.js";
 import { CliError, explainError } from "../ui/errors.js";
-import { addUsage, emptyUsage, formatUsage, formatUsd, plural } from "../ui/format.js";
+import { addUsage, closest, emptyUsage, formatUsage, formatUsd, groupWarnings, plural } from "../ui/format.js";
 import { isTTY, log } from "../ui/logger.js";
-import { c, sym } from "../ui/theme.js";
-import { rootFor } from "./context.js";
+import { c, contentWidth, sym, termWidth, wrapText } from "../ui/theme.js";
+import { rootFor, selfCommand } from "./context.js";
 import { findApiKey, toolsTable } from "./pipeline.js";
 import { createApprover, StreamPrinter } from "./agent-ui.js";
 
@@ -47,30 +47,38 @@ function readLine(promptText: string): Promise<string> {
   });
 }
 
-const HELP = [
-  `${c.cyan("/tools")}  list the agent's tools`,
-  `${c.cyan("/cost")}   token usage and spend so far`,
-  `${c.cyan("/reset")}  forget the conversation`,
-  `${c.cyan("/exit")}   quit ${c.dim("(or Ctrl+D)")}`,
-  c.dim("Ctrl+C stops the current reply; press it again to quit."),
-].join("\n");
+const HELP = () =>
+  [
+    `  ${c.cyan("/tools")}  list the agent's tools`,
+    `  ${c.cyan("/cost")}   tokens and spend so far`,
+    `  ${c.cyan("/reset")}  start a new conversation`,
+    `  ${c.cyan("/help")}   show this list`,
+    `  ${c.cyan("/exit")}   quit ${c.dim("(or Ctrl+D)")}`,
+    c.dim("  Ctrl+C stops a reply; press it again to quit."),
+  ].join("\n");
 
 export async function chatCommand(opts: ChatCmdOptions, cmd: Command): Promise<void> {
   const root = rootFor(cmd);
+  const self = selfCommand();
   if (!isTTY()) {
-    throw new CliError("chat needs an interactive terminal", { hint: `For scripts use: decree-harness run "your prompt" [--json]` });
+    throw new CliError("chat needs an interactive terminal", { hint: `In scripts and CI, use: ${self} run "your prompt" --json` });
   }
   const { spec, warnings } = await loadSpec(root);
   const { key } = await findApiKey(root, opts.apiKey);
   if (!key) throw new MissingApiKeyError();
 
   p.intro(banner("chat"));
-  for (const w of warnings) log.warn(w);
+  for (const w of groupWarnings(warnings)) log.warn(w);
   const model = opts.model ?? spec.model.id;
+  const width = contentWidth();
   log.info(
-    `${c.bold(spec.displayName)} ${c.dim(`${sym.dot} ${model} ${sym.dot} ${plural(spec.tools.length, "tool")}${spec.subagents.length ? ` ${sym.dot} ${plural(spec.subagents.length, "subagent")}` : ""}${opts.dryRunTools ? ` ${sym.dot} tools in dry-run mode` : ""}`)}`,
+    wrapText(
+      `${c.bold(spec.displayName)} ${c.dim(`${sym.dot} ${model} ${sym.dot} ${plural(spec.tools.length, "tool")}${spec.subagents.length ? ` ${sym.dot} ${plural(spec.subagents.length, "subagent")}` : ""}${opts.dryRunTools ? ` ${sym.dot} tools in dry-run mode` : ""}`)}`,
+      width,
+    ),
   );
-  log.message(c.dim(`Type a message, or /help. ${spec.goal ? `Goal: ${spec.goal}` : ""}`));
+  const intro = [spec.goal ? wrapText(spec.goal, width) : "", c.dim("Type a message and press Enter. /help lists commands.")].filter(Boolean);
+  log.message(intro.join("\n"));
 
   const printer = new StreamPrinter();
   const approve = createApprover(printer);
@@ -90,7 +98,7 @@ export async function chatCommand(opts: ChatCmdOptions, cmd: Command): Promise<v
       process.exit(130);
     }
     current.abort();
-    printer.line(c.dim("(stopped, press Ctrl+C again to quit)"));
+    printer.line(c.dim(`Stopped. The conversation is unchanged; press Ctrl+C again to quit.`));
   };
   process.on("SIGINT", onSigint);
 
@@ -113,11 +121,12 @@ export async function chatCommand(opts: ChatCmdOptions, cmd: Command): Promise<v
         } else if (command === "cost") {
           printer.line(`${c.dim("Usage")} ${formatUsage(usage)} ${c.dim(sym.dot)} ${c.bold(formatUsd(cost))} ${c.dim(`over ${plural(turns, "reply", "replies")}`)}`);
         } else if (command === "tools") {
-          printer.line(toolsTable(spec));
+          printer.line(toolsTable(spec, { width: termWidth() }));
         } else if (command === "help" || command === "?") {
-          printer.line(HELP);
+          printer.line(HELP());
         } else {
-          printer.line(c.yellow(`Unknown command /${command}. Try /help.`));
+          const guess = closest(command, ["tools", "cost", "reset", "help", "exit"]);
+          printer.line(c.yellow(`Unknown command /${command}.${guess ? ` Did you mean /${guess}?` : " Try /help."}`));
         }
         continue;
       }
@@ -126,6 +135,7 @@ export async function chatCommand(opts: ChatCmdOptions, cmd: Command): Promise<v
       const stops: string[] = [];
       printer.resetTurn();
       printer.write("\n");
+      printer.startWait("thinking");
       try {
         const result = await runAgent(spec, {
           projectRoot: root,
@@ -141,10 +151,11 @@ export async function chatCommand(opts: ChatCmdOptions, cmd: Command): Promise<v
             printer.onEvent(e);
           },
         });
+        printer.stopWait();
         usage = addUsage(usage, result.usage);
         cost += result.costUsd;
         if (current.signal.aborted) {
-          printer.line(c.dim("(reply stopped; the conversation keeps its previous state)"));
+          printer.newline();
           continue;
         }
         for (const m of stops) printer.line(c.yellow(`${sym.warn} ${m}`));
@@ -152,9 +163,11 @@ export async function chatCommand(opts: ChatCmdOptions, cmd: Command): Promise<v
         turns++;
         printer.newline();
         printer.line(c.dim(`${turnStats(result)}${formatUsd(result.costUsd)} ${sym.dot} ${formatUsd(cost)} total`));
+        printer.write("\n");
       } catch (err) {
+        printer.stopWait();
         if (current.signal.aborted) {
-          printer.line(c.dim("(reply stopped; the conversation keeps its previous state)"));
+          printer.newline();
         } else {
           const e = explainError(err);
           printer.line(`${c.red(sym.fail)} ${c.red(e.message)}${e.hint ? c.dim(`  hint: ${e.hint}`) : ""}`);

@@ -41,36 +41,34 @@ Pick targets with `--targets typescript,python,mcp,claude-code` (or `all`).
 
 ## Example
 
-`decree-harness tools --no-color` for that fixture (offline plan):
+`decree-harness tools --no-color` for that fixture (offline plan, 100 columns;
+narrower terminals drop the Kind column, wider ones add Source):
 
 ```
-Acme Orders Agent · 18 tools · approval mode: destructive
-┌───────────────────┬────────────┬─────────────────────┬─────────────────────┬─────────────────────┐
-│ Tool              │ Kind       │ Flags               │ Binds to            │ Source              │
-├───────────────────┼────────────┼─────────────────────┼─────────────────────┼─────────────────────┤
-│ get_health        │ http       │ ● read-only         │ GET /health         │ openapi:GET /health │
-│ list_orders       │ http       │ ● read-only         │ GET /orders         │ openapi:GET /orders │
-│ create_order      │ http       │ • writes            │ POST /orders        │ openapi:POST /orde… │
-│ get_order         │ http       │ ● read-only         │ GET /orders/{id}    │ openapi:GET /order… │
-│ delete_order      │ http       │ ▲ approval destruc… │ DELETE /orders/{id} │ openapi:DELETE /or… │
-│ cancel_order      │ http       │ ▲ approval destruc… │ POST /orders/{id}/… │ openapi:POST /orde… │
-│ list_customers    │ http       │ ● read-only         │ GET /customers      │ openapi:GET /custo… │
-│ get_customer      │ http       │ ● read-only         │ GET /customers/{cu… │ openapi:GET /custo… │
-│ list_order_events │ http       │ ● read-only         │ GET /orders/{id}/e… │ route:GET /orders/… │
-│ run_tests         │ shell      │ • writes            │ npm run test -- {{… │ package.json#scrip… │
-│ run_lint          │ shell      │ • writes            │ npm run lint        │ package.json#scrip… │
-│ run_build         │ shell      │ • writes            │ npm run build       │ package.json#scrip… │
-│ run_deploy        │ shell      │ ▲ approval destruc… │ npm run deploy      │ package.json#scrip… │
-│ run_db_migrate    │ shell      │ ▲ approval destruc… │ npm run db:migrate  │ package.json#scrip… │
-│ run_db_seed       │ shell      │ ▲ approval destruc… │ npm run db:seed     │ package.json#scrip… │
-│ read_file         │ read_file  │ ● read-only         │ .                   │ builtin             │
-│ list_files        │ list_files │ ● read-only         │ .                   │ builtin             │
-│ search_code       │ search     │ ● read-only         │ .                   │ builtin             │
-└───────────────────┴────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
-
-Subagents
-  api-investigator › get_health, list_orders, get_order, list_customers, get_customer, list_order_events
-  code-investigator › read_file, list_files, search_code
+Acme Orders Agent · 18 tools · asks before 5 risky tools
+┌─────────────────────┬────────────┬─────────────────────────────┐
+│ Tool                │ Kind       │ Binds to                    │
+├─────────────────────┼────────────┼─────────────────────────────┤
+│ ● check_health      │ http       │ GET /health                 │
+│ ● list_orders       │ http       │ GET /orders                 │
+│ ◆ create_order      │ http       │ POST /orders                │
+│ ● get_order         │ http       │ GET /orders/{id}            │
+│ ■ delete_order      │ http       │ DELETE /orders/{id}         │
+│ ■ cancel_order      │ http       │ POST /orders/{id}/cancel    │
+│ ● list_customers    │ http       │ GET /customers              │
+│ ● get_customer      │ http       │ GET /customers/{customerId} │
+│ ● list_order_events │ http       │ GET /orders/{id}/events     │
+│ ◆ run_tests         │ shell      │ npm run test -- {{filter}}  │
+│ ◆ run_lint          │ shell      │ npm run lint                │
+│ ◆ run_build         │ shell      │ npm run build               │
+│ ■ run_deploy        │ shell      │ npm run deploy              │
+│ ■ run_db_migrate    │ shell      │ npm run db:migrate          │
+│ ■ run_db_seed       │ shell      │ npm run db:seed             │
+│ ● read_file         │ read_file  │ .                           │
+│ ● list_files        │ list_files │ .                           │
+│ ● search_code       │ search     │ .                           │
+└─────────────────────┴────────────┴─────────────────────────────┘
+ ● read-only   ◆ writes   ■ destructive, asks first
 ```
 
 ## How it plans
@@ -99,7 +97,7 @@ kind of spec from the scan alone.
 | `decree-harness` / `init` | Interactive wizard: scan, ask for the goal and targets, plan, generate |
 | `scan [--json]` | Scan only; writes `.decree/profile.json` |
 | `plan` | Scan and plan; writes `decree.json` only |
-| `generate` | Render `decree.json` into code (`--targets`, `--out`, `--clean`, `--dry-run`) |
+| `generate` | Render `decree.json` into code (`--targets`, `--out`, `--clean`, `--dry-run`, `--json`) |
 | `refine "<feedback>"` | Change the harness in plain English, e.g. `refine "make it read-only"` |
 | `chat` | Talk to the agent in your terminal; tools run locally with approval prompts |
 | `run "<prompt>"` | One-shot run (`--json` for machine output) |

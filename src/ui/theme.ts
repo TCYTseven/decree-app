@@ -33,6 +33,8 @@ export const sym = {
   warn: u("▲", "!"),
   readOnly: u("●", "*"),
   approval: u("▲", "!"),
+  writes: u("◆", "+"),
+  destructive: u("■", "#"),
   arrow: u("›", ">"),
   bullet: u("•", "-"),
   dot: u("·", "."),
@@ -101,7 +103,69 @@ export function padStart(s: string, width: number): string {
   return w >= width ? s : " ".repeat(width - w) + s;
 }
 
+/** Terminal width in cells: the stream's own, else $COLUMNS (piped output), else 100. */
 export function termWidth(stream: NodeJS.WriteStream = process.stdout): number {
-  const cols = stream.columns;
+  const cols = stream.columns || Number.parseInt(process.env.COLUMNS ?? "", 10);
   return cols && cols > 20 ? cols : 100;
+}
+
+// eslint-disable-next-line no-control-regex
+const SGR_RE = /\u001b\[[0-9;]*m/y;
+
+/**
+ * Word-wrap `s` to `width` display cells. ANSI styles are carried across line
+ * breaks, existing newlines are kept, and continuation lines get `indent`.
+ * Words longer than the width are hard-broken.
+ */
+export function wrapText(s: string, width: number, indent = ""): string {
+  const max = Math.max(8, width);
+  const out: string[] = [];
+  for (const para of s.split("\n")) {
+    let open = ""; // SGR sequences seen so far, replayed on continuation lines
+    let line = "";
+    let lineW = 0;
+    let first = true;
+    const trimEnd = (l: string) => l.replace(/ +((?:\u001b\[[0-9;]*m)*)$/, "$1");
+    const push = () => {
+      out.push(trimEnd(line) + (open ? "\u001b[0m" : ""));
+      line = indent + open;
+      lineW = visibleWidth(indent);
+      first = false;
+    };
+    const words = para.split(" ");
+    words.forEach((word, wi) => {
+      const ww = visibleWidth(word);
+      const sep = wi === 0 ? 0 : 1;
+      if (!first && !ww && lineW === visibleWidth(indent) && !/\u001b/.test(word)) return; // no leading blanks
+      if (lineW + sep + ww > max && lineW > (first ? 0 : visibleWidth(indent))) push();
+      else if (wi > 0) {
+        line += " ";
+        lineW += 1;
+      }
+      // append the word char by char so styles are tracked and long words break
+      for (let i = 0; i < word.length; ) {
+        SGR_RE.lastIndex = i;
+        const m = SGR_RE.exec(word);
+        if (m) {
+          line += m[0];
+          open = m[0] === "\u001b[0m" ? "" : open + m[0];
+          i += m[0].length;
+          continue;
+        }
+        const ch = String.fromCodePoint(word.codePointAt(i)!);
+        const cw = charWidth(ch.codePointAt(0)!);
+        if (lineW + cw > max) push();
+        line += ch;
+        lineW += cw;
+        i += ch.length;
+      }
+    });
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+/** Width of the terminal minus clack's `│  ` gutter. */
+export function contentWidth(): number {
+  return termWidth() - 4;
 }

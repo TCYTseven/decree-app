@@ -1,7 +1,7 @@
 import * as p from "@clack/prompts";
 import { formatDuration } from "./format.js";
 import { isTTY, log, uiState } from "./logger.js";
-import { c, sym } from "./theme.js";
+import { c, sym, termWidth, wrapText } from "./theme.js";
 
 export interface Spinner {
   start(msg: string): void;
@@ -58,7 +58,7 @@ export function createSpinner(): Spinner {
     stop(msg) {
       if (timer) clearInterval(timer);
       const text = `${msg} ${c.dim(formatDuration(elapsed()))}`;
-      if (s) s.stop(text);
+      if (s) s.stop(wrapText(text, termWidth() - 3, "   "));
       else log.success(text);
     },
     error(msg) {

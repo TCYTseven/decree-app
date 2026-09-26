@@ -63,7 +63,7 @@ describe("cli", () => {
     const out = stripAnsi(stdout);
     expect(out).toContain("list_orders");
     expect(out).toContain("cancel_order");
-    expect(out).toContain("approval");
+    expect(out).toContain("asks first");
     expect(out).toContain("read-only");
   });
 
@@ -75,7 +75,7 @@ describe("cli", () => {
 
   it("missing decree.json is a friendly error with a hint", async () => {
     expect(await cli("--cwd", root, "tools")).toBe(1);
-    expect(stderr).toContain("No decree.json found");
+    expect(stderr).toContain("No decree.json in");
     expect(stderr).toContain("hint:");
     expect(stderr).not.toContain("    at ");
   });

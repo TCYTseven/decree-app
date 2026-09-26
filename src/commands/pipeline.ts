@@ -13,7 +13,7 @@ import { formatUsage, formatUsd, plural } from "../ui/format.js";
 import { log } from "../ui/logger.js";
 import { withSpinner } from "../ui/spinner.js";
 import { renderTable } from "../ui/table.js";
-import { c, sym, termWidth, truncate } from "../ui/theme.js";
+import { c, contentWidth, sym, truncate, wrapText } from "../ui/theme.js";
 import { renderFileTree, summarizeStatuses, type TreeEntry } from "../ui/tree.js";
 
 // ---------------------------------------------------------------------------
@@ -83,6 +83,7 @@ function topResource(profile: ProjectProfile): string | undefined {
 
 /** A goal suggestion derived from the profile, e.g. "Operate the orders API and triage test failures". */
 export function suggestGoal(profile: ProjectProfile): string {
+  if (isEmptyProfile(profile)) return "Help me write, explain and safely change code in this project";
   const hasTests = profile.scripts.some((s) => /test|check|spec/i.test(s.name));
   const tail = hasTests ? "triage test failures" : "answer questions about the code";
   if (profile.apis.length) {
@@ -95,6 +96,12 @@ export function suggestGoal(profile: ProjectProfile): string {
   return `Answer questions about the ${profile.name} codebase and help make safe changes`;
 }
 
+
+/** True when the scan found nothing to build tools from (no files, or no code, APIs or scripts). */
+export function isEmptyProfile(profile: ProjectProfile): boolean {
+  if (profile.stats.files === 0) return true;
+  return !profile.languages.length && !profile.apis.length && !profile.scripts.length && !profile.frameworks.length && !profile.cli && !profile.database;
+}
 
 /** Compact multi-line profile summary for a clack note. */
 export function profileSummary(profile: ProjectProfile): string {
@@ -131,7 +138,7 @@ export function profileSummary(profile: ProjectProfile): string {
   if (profile.database) rows.push(["Database", `${profile.database.kind}${profile.database.models.length ? c.dim(` (${plural(profile.database.models.length, "model")})`) : ""}`]);
   if (profile.cli) rows.push(["CLI", profile.cli.bin]);
   rows.push(["Agent config", agentCfg.length ? agentCfg.join(", ") : c.dim("none")]);
-  rows.push(["Files", `${profile.stats.files}${profile.stats.truncated ? c.yellow(" (truncated)") : ""} ${c.dim(`scanned in ${profile.stats.scanMs}ms`)}`]);
+  if (profile.stats.truncated) rows.push(["Files", `${profile.stats.files} ${c.yellow("(scan stopped early: very large tree)")}`]);
   const w = Math.max(...rows.map(([k]) => k.length));
   return rows.map(([k, v]) => `${c.dim(k.padEnd(w))}  ${v}`).join("\n");
 }
@@ -207,10 +214,48 @@ export async function planStep(
   );
 }
 
+export type Safety = "read-only" | "writes" | "approval" | "destructive";
+
+export function safetyOf(t: HarnessSpec["tools"][number]): Safety {
+  if (t.destructive) return "destructive";
+  if (t.requiresApproval) return "approval";
+  if (t.readOnly) return "read-only";
+  return "writes";
+}
+
+const SAFETY: Record<Safety, { glyph: () => string; label: string }> = {
+  "read-only": { glyph: () => c.green(sym.readOnly), label: "read-only" },
+  writes: { glyph: () => c.blue(sym.writes), label: "writes" },
+  approval: { glyph: () => c.yellow(sym.approval), label: "asks first" },
+  destructive: { glyph: () => c.red(sym.destructive), label: "destructive, asks first" },
+};
+
+/** One-cell safety marker; see safetyLegend(). */
+export function safetyGlyph(t: HarnessSpec["tools"][number]): string {
+  return SAFETY[safetyOf(t)].glyph();
+}
+
+/** Glyph plus words, e.g. `▲ asks first`. */
 export function safetyBadge(t: HarnessSpec["tools"][number]): string {
-  if (t.requiresApproval || t.destructive) return c.yellow(`${sym.approval} approval`);
-  if (t.readOnly) return c.green(`${sym.readOnly} read-only`);
-  return c.blue(`${sym.bullet} writes`);
+  const s = SAFETY[safetyOf(t)];
+  return `${s.glyph()} ${s.label}`;
+}
+
+/** Legend for the glyphs used by `tools`, e.g. `● read-only  ◆ writes  ▲ asks first`. */
+export function safetyLegend(tools: HarnessSpec["tools"]): string {
+  const used = new Set(tools.map(safetyOf));
+  const order: Safety[] = ["read-only", "writes", "approval", "destructive"];
+  return order
+    .filter((k) => used.has(k))
+    .map((k) => `${SAFETY[k].glyph()} ${c.dim(SAFETY[k].label)}`)
+    .join("   ");
+}
+
+/** Plain-English approval mode, e.g. `asks before 5 risky tools`. */
+export function approvalModeText(mode: HarnessSpec["guardrails"]["approvalMode"], gated?: number): string {
+  if (mode === "always") return "asks before every tool call";
+  if (mode === "never") return "never asks (approvals off)";
+  return gated === undefined ? "asks before risky tools" : gated ? `asks before ${plural(gated, "risky tool")}` : "no tools need approval";
 }
 
 export function toolTarget(t: HarnessSpec["tools"][number]): string {
@@ -229,22 +274,50 @@ export function toolTarget(t: HarnessSpec["tools"][number]): string {
   }
 }
 
-export function toolsTable(spec: HarnessSpec, opts: { source?: boolean } = {}): string {
+/**
+ * The tools table: a safety glyph + name, kind, binding and (optionally) source.
+ * Columns drop out on narrow terminals instead of truncating everything; a legend follows.
+ */
+export function toolsTable(spec: HarnessSpec, opts: { source?: boolean; width?: number } = {}): string {
+  const width = opts.width ?? contentWidth();
   const cols = [
-    { header: "Tool", min: 10 },
-    { header: "Kind", min: 4 },
-    { header: "Safety", min: 8 },
-    { header: opts.source ? "Source" : "Binds to", min: 8, max: 48 },
+    { header: "Tool", min: 12 },
+    { header: "Kind", min: 4, hideBelow: 66 },
+    { header: "Binds to", min: 10, max: 44 },
+    ...(opts.source ? [{ header: "Source", min: 8, max: 32, hideBelow: 104 }] : []),
   ];
-  const rows = spec.tools.map((t) => [c.bold(t.name), c.dim(t.kind), safetyBadge(t), c.dim(opts.source ? (t.source ?? "") : toolTarget(t))]);
-  return renderTable(cols, rows, { width: termWidth() - 4 }); // leave room for the clack gutter
+  const rows = spec.tools.map((t) => [
+    `${safetyGlyph(t)} ${c.bold(t.name)}`,
+    c.dim(t.kind),
+    toolTarget(t),
+    ...(opts.source ? [c.dim(t.source ?? "")] : []),
+  ]);
+  const table = renderTable(cols, rows, { width });
+  return `${table}\n${wrapText(` ${safetyLegend(spec.tools)}`, width, " ")}`;
+}
+
+/**
+ * A list of commands with dim descriptions, aligned in two columns when they fit
+ * in `width`, otherwise with each description on its own line under the command.
+ */
+export function renderSteps(steps: [string, string][], width: number): string {
+  const w = Math.max(...steps.filter(([, d]) => d).map(([x]) => x.length), 0) + 2;
+  const fits = steps.every(([x, d]) => !d || w + d.length <= width);
+  return steps
+    .map(([x, d]) => {
+      if (!d) return c.cyan(x);
+      if (fits) return `${c.cyan(x.padEnd(w))}${c.dim(d)}`;
+      return `${c.cyan(x)}\n  ${c.dim(d)}`;
+    })
+    .join("\n");
 }
 
 /** Summary printed after planning. */
 export function specSummary(spec: HarnessSpec): string {
   const lines: string[] = [];
   lines.push(`${c.bold(spec.displayName)} ${c.dim(`(${spec.name})`)}`);
-  if (spec.description) lines.push(c.dim(spec.description));
+  const width = contentWidth();
+  if (spec.description) lines.push(c.dim(wrapText(spec.description, width)));
   lines.push("");
   lines.push(toolsTable(spec));
   if (spec.subagents.length) {
@@ -252,17 +325,17 @@ export function specSummary(spec: HarnessSpec): string {
     lines.push(c.bold("Subagents"));
     for (const s of spec.subagents) {
       lines.push(`  ${c.cyan(s.name)} ${c.dim(`${sym.dot} ${plural(s.tools.length, "tool")} ${sym.dot} ${s.model ?? spec.model.subagentId}`)}`);
-      lines.push(`    ${c.dim(truncate(s.description, termWidth() - 8))}`);
+      lines.push(`    ${c.dim(truncate(s.description, width - 4))}`);
     }
   }
   lines.push("");
   const approvals = spec.tools.filter((t) => t.requiresApproval || t.destructive).length;
-  const facts = [
-    `${c.dim("Model")} ${c.cyan(spec.model.id)} ${c.dim(`(effort ${spec.model.effort}${spec.model.thinking === "adaptive" ? ", adaptive thinking" : ""})`)}`,
-    `${c.dim("Evals")} ${spec.evals.length}`,
-    `${c.dim("Approval")} ${spec.guardrails.approvalMode}${approvals ? c.dim(` (${approvals} gated)`) : ""}`,
+  const facts: [string, string][] = [
+    ["Model", `${c.cyan(spec.model.id)} ${c.dim(`effort ${spec.model.effort}${spec.model.thinking === "adaptive" ? ", adaptive thinking" : ""}`)}`],
+    ["Safety", approvalModeText(spec.guardrails.approvalMode, approvals)],
+    ["Evals", `${spec.evals.length}`],
   ];
-  lines.push(facts.join(c.dim("   ")));
+  for (const [k, v] of facts) lines.push(wrapText(`${c.dim(k.padEnd(7))}${v}`, width, " ".repeat(7)));
   return lines.join("\n");
 }
 
@@ -311,7 +384,7 @@ export function printWriteReport(report: WriteReport, relOut: string, dryRun?: b
       ? `${c.bold(relOut)}/ is up to date`
       : `Wrote ${c.bold(relOut)}/`;
   log.step(`${title}  ${summarizeStatuses(entries)}`);
-  log.message(renderFileTree(entries, relOut));
+  if (!nothingChanged || dryRun) log.message(renderFileTree(entries, relOut));
   if (report.skipped.length) {
     log.warn(
       `${plural(report.skipped.length, "file")} you edited ${report.skipped.length === 1 ? "was" : "were"} left untouched. Re-run with ${c.bold("--force")} to overwrite.`,

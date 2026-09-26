@@ -73,3 +73,44 @@ export function displayPath(p: string, cwd = process.cwd()): string {
   const home = os.homedir();
   return home && p.startsWith(home + path.sep) ? `~${p.slice(home.length)}` : p;
 }
+
+/**
+ * Collapse warnings that differ only by array index, e.g. six
+ * `evals[3].expect.toolsNotCalled: unknown tool "x"` lines become one line with a count.
+ */
+export function groupWarnings(warnings: string[]): string[] {
+  const groups = new Map<string, { first: string; count: number }>();
+  for (const w of warnings) {
+    const key = w.replace(/\[\d+\]/g, "[]");
+    const g = groups.get(key);
+    if (g) g.count++;
+    else groups.set(key, { first: w, count: 1 });
+  }
+  return [...groups.entries()].map(([key, g]) => (g.count === 1 ? g.first : `${key.replace(/\[\]/g, "[…]").replace(/\.$/, "")} (${g.count} places)`));
+}
+
+/** Edit distance, for "did you mean" suggestions. */
+export function editDistance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array<number>(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  return d[a.length][b.length];
+}
+
+/** The closest candidate within a small edit distance, if any. */
+export function closest(word: string, candidates: string[]): string | undefined {
+  let best: string | undefined;
+  let bestD = Infinity;
+  for (const cand of candidates) {
+    const dist = editDistance(word.toLowerCase(), cand.toLowerCase());
+    if (dist < bestD) {
+      bestD = dist;
+      best = cand;
+    }
+  }
+  return best && bestD <= Math.max(1, Math.floor(best.length / 3)) ? best : undefined;
+}

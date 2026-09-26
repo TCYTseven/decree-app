@@ -11,7 +11,7 @@ import { CliError } from "../ui/errors.js";
 import { log } from "../ui/logger.js";
 import { withSpinner } from "../ui/spinner.js";
 import { c, sym } from "../ui/theme.js";
-import { rootFor } from "./context.js";
+import { rootFor, selfCommand } from "./context.js";
 import { findApiKey, generateStep, makeLLM, safetyBadge, usageLine } from "./pipeline.js";
 
 export interface RefineCmdOptions {
@@ -85,7 +85,7 @@ export function renderDiff(d: SpecDiff, after: HarnessSpec): string {
 export async function refineCommand(feedbackParts: string[], opts: RefineCmdOptions, cmd: Command): Promise<void> {
   const root = rootFor(cmd);
   const feedback = feedbackParts.join(" ").trim();
-  if (!feedback) throw new CliError("Tell decree what to change", { hint: `e.g. decree-harness refine "make every tool read-only"` });
+  if (!feedback) throw new CliError("Tell decree what to change", { hint: `e.g. ${selfCommand()} refine "make every tool read-only"` });
   const { spec } = await loadSpec(root);
   const { key } = await findApiKey(root, opts.apiKey);
   if (!key) throw new MissingApiKeyError();
@@ -106,6 +106,7 @@ export async function refineCommand(feedbackParts: string[], opts: RefineCmdOpti
   for (const w of checked.warnings) log.warn(w);
   const next = checked.spec;
   const diff = diffSpecs(spec, next);
+  log.step("Changes");
   log.message(renderDiff(diff, next));
   log.info(usageLine(llm, "Refine"));
   if (opts.dryRun) {
@@ -117,5 +118,5 @@ export async function refineCommand(feedbackParts: string[], opts: RefineCmdOpti
   if (opts.generate !== false) {
     await generateStep(root, next, { targets: next.targets, outDir: opts.out ?? DEFAULT_OUT_DIR, force: opts.force });
   }
-  p.outro("Refined");
+  p.outro(`Refined ${sym.dot} next: ${c.cyan(`${selfCommand()} chat`)}`);
 }

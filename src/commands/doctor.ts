@@ -10,8 +10,8 @@ import { banner } from "../ui/banner.js";
 import { explainError, SilentExit } from "../ui/errors.js";
 import { formatDuration, plural } from "../ui/format.js";
 import { log } from "../ui/logger.js";
-import { c, sym } from "../ui/theme.js";
-import { rootFor } from "./context.js";
+import { c, contentWidth, sym, wrapText } from "../ui/theme.js";
+import { rootFor, selfCommand } from "./context.js";
 import { findApiKey } from "./pipeline.js";
 
 type Status = "ok" | "warn" | "fail" | "skip";
@@ -66,7 +66,7 @@ export async function runChecks(root: string, opts: { online?: boolean; out?: st
             name: "Anthropic API key",
             status: "warn",
             detail: "not set",
-            hint: "export ANTHROPIC_API_KEY=… (or add it to .env). Needed for Claude planning, chat, run and eval.",
+            hint: "export ANTHROPIC_API_KEY=sk-ant-... (or add it to .env). Needed to plan with Claude, chat, run and eval.",
           },
     );
   } catch (err) {
@@ -85,7 +85,8 @@ export async function runChecks(root: string, opts: { online?: boolean; out?: st
     });
   } catch (err) {
     const e = explainError(err);
-    checks.push({ name: SPEC_FILENAME, status: "fail", detail: e.message, hint: e.details?.slice(0, 3).join("; ") || e.hint });
+    const notFound = (err as { name?: string }).name === "SpecNotFoundError";
+    checks.push({ name: SPEC_FILENAME, status: "fail", detail: notFound ? "not found" : e.message, hint: e.details?.slice(0, 3).join("; ") || e.hint });
   }
 
   if (spec) {
@@ -105,13 +106,13 @@ export async function runChecks(root: string, opts: { online?: boolean; out?: st
     const out = projectPaths(root, opts.out ?? DEFAULT_OUT_DIR).outDir;
     const rel = path.relative(root, out) || ".";
     if (!(await isDir(out))) {
-      checks.push({ name: "Generated code", status: "warn", detail: `${rel}/ not found`, hint: "Run `decree-harness generate`." });
+      checks.push({ name: "Generated code", status: "warn", detail: `${rel}/ not found`, hint: `Run \`${selfCommand()} generate\`.` });
     } else {
       const missingTargets: string[] = [];
       for (const t of spec.targets) if (!(await isDir(path.join(out, TARGET_DIRS[t])))) missingTargets.push(TARGET_DIRS[t]);
       checks.push(
         missingTargets.length
-          ? { name: "Generated code", status: "warn", detail: `${rel}/ is missing ${missingTargets.join(", ")}`, hint: "Run `decree-harness generate`." }
+          ? { name: "Generated code", status: "warn", detail: `${rel}/ is missing ${missingTargets.join(", ")}`, hint: `Run \`${selfCommand()} generate\`.` }
           : { name: "Generated code", status: "ok", detail: `${rel}/ (${spec.targets.join(", ")})` },
       );
     }
@@ -146,10 +147,12 @@ export async function doctorCommand(opts: { online?: boolean; out?: string; json
   } else {
     p.intro(banner("doctor"));
     const w = Math.max(...checks.map((x) => x.name.length));
+    const pad = " ".repeat(w + 4);
+    const width = contentWidth();
     const lines = checks.map((x) => {
       const detail = x.status === "skip" ? c.dim(x.detail ?? "") : x.detail ?? "";
-      let line = `${ICON[x.status]("")} ${x.status === "skip" ? c.dim(x.name.padEnd(w)) : x.name.padEnd(w)}  ${detail}`;
-      if (x.hint && x.status !== "ok") line += `\n  ${" ".repeat(w)}  ${c.dim(x.hint)}`;
+      let line = wrapText(`${ICON[x.status]("")} ${x.status === "skip" ? c.dim(x.name.padEnd(w)) : x.name.padEnd(w)}  ${detail}`, width, pad);
+      if (x.hint && x.status !== "ok") line += `\n${wrapText(`${pad}${c.dim(x.hint)}`, width, pad)}`;
       return line;
     });
     log.message(lines.join("\n"));

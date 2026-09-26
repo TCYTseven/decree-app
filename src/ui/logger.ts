@@ -1,5 +1,8 @@
 import * as p from "@clack/prompts";
-import { c, sym } from "./theme.js";
+import { c, contentWidth, sym, wrapText } from "./theme.js";
+
+/** Fit a message to the terminal; clack adds the `│  ` gutter to continuation lines. */
+const fit = (msg: string) => wrapText(msg, contentWidth());
 
 export const uiState = {
   verbose: false,
@@ -22,30 +25,30 @@ export function isTTY(): boolean {
 
 export const log = {
   info(msg: string) {
-    if (!uiState.quiet) p.log.info(msg);
+    if (!uiState.quiet) p.log.info(fit(msg));
   },
   step(msg: string) {
-    if (!uiState.quiet) p.log.step(msg);
+    if (!uiState.quiet) p.log.step(fit(msg));
   },
   success(msg: string) {
-    if (!uiState.quiet) p.log.success(msg);
+    if (!uiState.quiet) p.log.success(fit(msg));
   },
   warn(msg: string) {
     if (uiState.quiet) process.stderr.write(`${c.yellow(`${sym.warn} ${msg}`)}\n`);
-    else p.log.warn(msg);
+    else p.log.warn(fit(msg));
   },
   error(msg: string) {
     process.stderr.write(`${c.red(`${sym.fail} ${msg}`)}\n`);
   },
   message(msg: string) {
-    if (!uiState.quiet) p.log.message(msg);
+    if (!uiState.quiet) p.log.message(fit(msg));
   },
   /** Only printed with --verbose, always to stderr. */
   debug(msg: string) {
     if (uiState.verbose) process.stderr.write(`${c.dim(`[debug] ${msg}`)}\n`);
   },
   note(body: string, title?: string) {
-    if (!uiState.quiet) p.note(body, title);
+    if (!uiState.quiet) p.note(wrapText(body, contentWidth() - 2), title);
   },
   /** Raw line to stdout (no gutter). */
   raw(msg = "") {

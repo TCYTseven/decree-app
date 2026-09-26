@@ -51,7 +51,7 @@ export function renderFileTree(
   opts: { collapseUnchanged?: boolean; maxLines?: number } = {},
 ): string {
   const collapse = opts.collapseUnchanged ?? true;
-  const maxLines = opts.maxLines ?? 32;
+  const maxLines = opts.maxLines ?? 20;
   const root: Node = { name: rootLabel, children: new Map() };
   for (const e of entries) {
     const parts = e.path.split("/").filter(Boolean);
@@ -92,9 +92,13 @@ export function renderFileTree(
 
   const lines = [c.bold(rootLabel.endsWith("/") ? rootLabel : `${rootLabel}/`)];
   const walk = (node: Node, prefix: string) => {
-    const kids = [...node.children.values()].sort(sortNodes);
+    const all = [...node.children.values()].sort(sortNodes);
+    // In a directory with changes, unchanged files are summarized in one line instead of listed.
+    const mixed = collapse && all.some((k) => k.children.size || k.status !== "unchanged");
+    const kids = mixed ? all.filter((k) => k.children.size || k.status !== "unchanged") : all;
+    const hidden = all.length - kids.length;
     kids.forEach((kid, i) => {
-      const last = i === kids.length - 1;
+      const last = i === kids.length - 1 && !hidden;
       const branch = c.dim(last ? "└── " : "├── ");
       const nextPrefix = prefix + c.dim(last ? "    " : "│   ");
       if (kid.children.size) {
@@ -116,6 +120,7 @@ export function renderFileTree(
         lines.push(`${prefix}${branch}${name} ${LABEL[st](TEXT[st])}`);
       }
     });
+    if (hidden) lines.push(`${prefix}${c.dim(`└── ${hidden} unchanged file${hidden === 1 ? "" : "s"}`)}`);
   };
   walk(root, "");
   return lines.join("\n");

@@ -1,0 +1,48 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ux snapshots (80 columns, piped) > an invalid --targets fails before scanning 1`] = `
+"✗ Unknown target "rust"
+  hint: Valid targets: typescript, python, mcp, claude-code (or "all")
+"
+`;
+
+exports[`ux snapshots (80 columns, piped) > missing decree.json 1`] = `
+"✗ No decree.json in <root>
+  hint: Run \`npx decree-harness init\` to create one (or pass --cwd <project>).
+"
+`;
+
+exports[`ux snapshots (80 columns, piped) > tools 1`] = `
+"Acme Ops Agent · 10 tools · asks before 2 risky tools
+┌────────────────┬────────────┬──────────────────────────┐
+│ Tool           │ Kind       │ Binds to                 │
+├────────────────┼────────────┼──────────────────────────┤
+│ ● list_orders  │ http       │ GET /orders              │
+│ ● get_order    │ http       │ GET /orders/{id}         │
+│ ■ cancel_order │ http       │ POST /orders/{id}/cancel │
+│ ● run_tests    │ shell      │ npm test -- {{pattern}}  │
+│ ● read_file    │ read_file  │ .                        │
+│ ■ write_file   │ write_file │ .                        │
+│ ● list_files   │ list_files │ .                        │
+│ ● search_code  │ search     │ .                        │
+│ ● web_search   │ web_search │ server tool              │
+│ ◆ memory       │ memory     │ server tool              │
+└────────────────┴────────────┴──────────────────────────┘
+ ● read-only   ◆ writes   ■ destructive, asks first
+
+Subagents
+  test-triager › run_tests, read_file, search_code, list_files
+"
+`;
+
+exports[`ux snapshots (80 columns, piped) > unknown command suggests the closest one 1`] = `
+"✗ Unknown command "genrate". Did you mean generate?
+  hint: Run \`npx decree-harness --help\` to see every command.
+"
+`;
+
+exports[`ux snapshots (80 columns, piped) > unknown option is styled like our errors 1`] = `
+"✗ Unknown option '--targts'. Did you mean --targets?
+  hint: Run \`npx decree-harness init --help\` for usage.
+"
+`;

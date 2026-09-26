@@ -1,4 +1,7 @@
-import { c, sym } from "./theme.js";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { displayPath } from "./format.js";
+import { c, sym, termWidth, wrapText } from "./theme.js";
 import { uiState } from "./logger.js";
 import { CancelledError } from "./prompts.js";
 
@@ -64,7 +67,18 @@ export function explainError(err: unknown): Explained {
     };
   }
   if (name === "SpecValidationError" || name === "SpecNotFoundError" || name === "SpecParseError") {
-    return { message, hint: (err as { hint?: string }).hint, details: withDetails(err), exitCode: 1, showStack: false };
+    const file = (err as { file?: unknown }).file;
+    const hint = (err as { hint?: string }).hint;
+    if (typeof file === "string") {
+      const shown = displayPath(file);
+      if (name === "SpecNotFoundError") {
+        const dir = displayPath(path.dirname(file));
+        return { message: `No ${path.basename(file)} in ${dir === "." ? "this directory" : dir}`, hint, exitCode: 1, showStack: false };
+      }
+      if (name === "SpecParseError") return { message: describeJsonError(file, shown, message), hint, exitCode: 1, showStack: false };
+      return { message: message.split(file).join(shown), hint, details: withDetails(err), exitCode: 1, showStack: false };
+    }
+    return { message, hint, details: withDetails(err), exitCode: 1, showStack: false };
   }
   if (name === "WriterError") {
     return { message, hint: (err as { hint?: string }).hint, exitCode: 1, showStack: false };
@@ -124,6 +138,50 @@ export function explainError(err: unknown): Explained {
   return { message: message || "Unknown error", exitCode: 1, showStack: true };
 }
 
+/** `decree.json:12 is not valid JSON (unexpected ",")` from V8's JSON.parse message. */
+function describeJsonError(file: string, shown: string, message: string): string {
+  if (/Unexpected end of JSON input/i.test(message)) return `${shown} is not valid JSON: the file ends too early (missing a closing bracket?)`;
+  const m = /Unexpected token '(.+?)', (?:\.\.\.)?"([\s\S]*?)"(?:\.\.\.)? is not valid JSON/.exec(message);
+  const m2 = /in JSON at position (\d+)(?: \(line (\d+) column (\d+)\))?/.exec(message);
+  let line: number | undefined;
+  try {
+    const text = readFileSync(file, "utf8");
+    if (m2?.[2]) line = Number(m2[2]);
+    else if (m2) line = text.slice(0, Number(m2[1])).split("\n").length;
+    else if (m) {
+      const at = text.indexOf(m[2]);
+      if (at >= 0) {
+        const tok = m[2].indexOf(m[1], Math.floor(m[2].length / 2) - 2);
+        line = text.slice(0, at + Math.max(0, tok)).split("\n").length;
+      }
+    }
+  } catch {
+    // unreadable now; fall back to the message without a line number
+  }
+  const what = m ? `unexpected "${m[1]}"` : message.replace(/^.*?is not valid JSON:\s*/s, "").split("\n")[0];
+  return `${shown}${line ? `:${line}` : ""} is not valid JSON (${what})`;
+}
+
+/**
+ * Restyle commander's own parse errors (unknown option, missing argument…) to
+ * match ours: `✗ Unknown option --targts. Did you mean --targets?`
+ */
+export function formatCommanderError(raw: string): string {
+  const lines = raw
+    .trim()
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  let msg = (lines[0] ?? "").replace(/^error:\s*/, "");
+  msg = msg.charAt(0).toUpperCase() + msg.slice(1);
+  const rest = lines
+    .slice(1)
+    .map((l) => l.replace(/^\((.*)\)$/, "$1"))
+    .join(" ");
+  if (rest && !/[.?!]$/.test(msg)) msg += ".";
+  return `${c.red(sym.fail)} ${c.red(msg)}${rest ? ` ${rest}` : ""}\n`;
+}
+
 /** Print an error nicely and return the process exit code. */
 export function handleError(err: unknown): number {
   if (err instanceof SilentExit) return err.exitCode;
@@ -133,9 +191,10 @@ export function handleError(err: unknown): number {
     out(c.dim(e.message));
     return e.exitCode;
   }
-  out(`${c.red(sym.fail)} ${c.red(e.message)}`);
-  for (const d of e.details ?? []) out(`  ${c.dim(sym.bullet)} ${d}`);
-  if (e.hint) out(`  ${c.dim("hint:")} ${e.hint}`);
+  const width = termWidth(process.stderr);
+  out(wrapText(`${c.red(sym.fail)} ${c.red(e.message)}`, width, "  "));
+  for (const d of e.details ?? []) out(wrapText(`  ${c.dim(sym.bullet)} ${d.replace(/"\|"/g, '" | "')}`, width, "    "));
+  if (e.hint) out(wrapText(`  ${c.dim("hint:")} ${e.hint}`, width, "        "));
   if (uiState.verbose && err instanceof Error && err.stack) {
     out(c.dim(err.stack));
     const cause = (err as { cause?: unknown }).cause;

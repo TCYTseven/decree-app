@@ -6,12 +6,12 @@ import { runEvals } from "../eval/index.js";
 import { MissingApiKeyError } from "../llm/client.js";
 import { banner } from "../ui/banner.js";
 import { CliError, SilentExit } from "../ui/errors.js";
-import { formatUsd, plural } from "../ui/format.js";
+import { formatUsd, groupWarnings, plural } from "../ui/format.js";
 import { log, setQuiet } from "../ui/logger.js";
 import { createSpinner } from "../ui/spinner.js";
 import { renderTable } from "../ui/table.js";
 import { c, sym, termWidth } from "../ui/theme.js";
-import { rootFor } from "./context.js";
+import { rootFor, selfCommand } from "./context.js";
 import { findApiKey, llmCost, makeLLM } from "./pipeline.js";
 
 export interface EvalCmdOptions {
@@ -53,13 +53,13 @@ export async function evalCommand(opts: EvalCmdOptions, cmd: Command): Promise<v
   const cases = spec.evals.filter((e) => !opts.filter || e.id.includes(opts.filter));
   if (!cases.length) {
     throw new CliError(opts.filter ? `No eval ids match "${opts.filter}"` : "decree.json has no evals", {
-      hint: opts.filter ? `Available: ${spec.evals.map((e) => e.id).join(", ")}` : `Add some with: decree-harness refine "add evals for …"`,
+      hint: opts.filter ? `Available: ${spec.evals.map((e) => e.id).join(", ")}` : `Add some with: ${selfCommand()} refine "add evals for ..."`,
     });
   }
 
   if (!opts.json) {
     p.intro(banner("eval"));
-    for (const w of warnings) log.warn(w);
+    for (const w of groupWarnings(warnings)) log.warn(w);
     log.info(
       `${c.bold(spec.displayName)} ${c.dim(`${sym.dot} ${plural(cases.length, "case")} ${sym.dot} ${opts.liveTools ? c.yellow("live tools") : "tools in dry-run mode"}`)}`,
     );
@@ -111,7 +111,8 @@ export async function evalCommand(opts: EvalCmdOptions, cmd: Command): Promise<v
       const lines = [`${c.red(sym.fail)} ${c.bold(r.id)}`];
       if (r.error) lines.push(`  ${c.red(r.error)}`);
       for (const ch of r.checks.filter((x) => !x.passed)) lines.push(`  ${c.red(sym.fail)} ${ch.name}${ch.detail ? c.dim(` ${sym.dash} ${ch.detail}`) : ""}`);
-      if (r.run?.toolCalls.length) lines.push(c.dim(`  called: ${r.run.toolCalls.map((t) => t.name).join(", ")}`));
+      const mentioned = r.checks.some((ch) => /called:/.test(ch.detail ?? ""));
+      if (r.run?.toolCalls.length && !mentioned) lines.push(c.dim(`  called: ${r.run.toolCalls.map((t) => t.name).join(", ")}`));
       log.message(lines.join("\n"));
     }
     const verdict = summary.failed

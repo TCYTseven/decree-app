@@ -7,6 +7,8 @@ export interface Column {
   min?: number;
   /** Hard cap on the column width. */
   max?: number;
+  /** Drop this column entirely when the width budget is below this many cells. */
+  hideBelow?: number;
 }
 
 export interface TableOptions {
@@ -19,9 +21,12 @@ export interface TableOptions {
 const B = { tl: "┌", tr: "┐", bl: "└", br: "┘", h: "─", v: "│", t: "┬", b: "┴", l: "├", r: "┤", x: "┼" };
 
 /** Render a light box-drawing table, shrinking the widest columns to fit the terminal. */
-export function renderTable(columns: Column[], rows: string[][], opts: TableOptions = {}): string {
+export function renderTable(allColumns: Column[], allRows: string[][], opts: TableOptions = {}): string {
   const indent = opts.indent ?? "";
   const budget = (opts.width ?? termWidth()) - visibleWidth(indent);
+  const keep = allColumns.map((col) => !(col.hideBelow && budget < col.hideBelow));
+  const columns = allColumns.filter((_, i) => keep[i]);
+  const rows = allRows.map((r) => r.filter((_, i) => keep[i]));
   const widths = columns.map((col, i) => {
     let w = visibleWidth(col.header);
     for (const r of rows) w = Math.max(w, visibleWidth(r[i] ?? ""));
@@ -42,6 +47,13 @@ export function renderTable(columns: Column[], rows: string[][], opts: TableOpti
     });
     if (idx < 0) break;
     widths[idx]--;
+    total--;
+  }
+  // Still too wide at minimum widths: keep shrinking the widest column (never past 1).
+  while (total > budget) {
+    const i = widths.indexOf(Math.max(...widths));
+    if (widths[i] <= 1) break;
+    widths[i]--;
     total--;
   }
   const d = (s: string) => c.dim(s);

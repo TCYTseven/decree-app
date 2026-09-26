@@ -4,9 +4,9 @@ import { loadSpec } from "../core/config.js";
 import { runAgent } from "../runtime/index.js";
 import { MissingApiKeyError } from "../llm/client.js";
 import { CliError } from "../ui/errors.js";
-import { formatUsage, formatUsd } from "../ui/format.js";
+import { formatTokens, formatUsage, formatUsd, plural, totalTokens } from "../ui/format.js";
 import { isTTY, log } from "../ui/logger.js";
-import { c, sym } from "../ui/theme.js";
+import { c, sym, termWidth } from "../ui/theme.js";
 import { rootFor } from "./context.js";
 import { findApiKey } from "./pipeline.js";
 import { createApprover, StreamPrinter } from "./agent-ui.js";
@@ -50,6 +50,7 @@ export async function runCommand(promptParts: string[], opts: RunCmdOptions, cmd
   };
   process.on("SIGINT", onSigint);
   let result: RunResult;
+  if (!opts.json) printer.startWait("thinking");
   try {
     result = await runAgent(spec, {
       projectRoot: root,
@@ -72,15 +73,18 @@ export async function runCommand(promptParts: string[], opts: RunCmdOptions, cmd
       },
     });
   } finally {
+    printer.stopWait();
     process.off("SIGINT", onSigint);
   }
   if (opts.json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } else {
     printer.newline();
-    process.stderr.write(
-      c.dim(`\n${result.turns} turn${result.turns === 1 ? "" : "s"} ${sym.dot} ${result.toolCalls.length} tool call${result.toolCalls.length === 1 ? "" : "s"} ${sym.dot} ${formatUsage(result.usage)} ${sym.dot} ${formatUsd(result.costUsd)}\n`),
-    );
+    // Full token breakdown when it fits on one line, else a compact total.
+    const head = [plural(result.turns, "turn"), plural(result.toolCalls.length, "tool call")];
+    const full = [...head, formatUsage(result.usage), formatUsd(result.costUsd)].join(` ${sym.dot} `);
+    const short = [...head, `${formatTokens(totalTokens(result.usage))} tokens`, formatUsd(result.costUsd)].join(` ${sym.dot} `);
+    process.stderr.write(c.dim(`\n${full.length < termWidth(process.stderr) ? full : short}\n`));
   }
   if (controller.signal.aborted) throw new CliError("Run aborted.", { exitCode: 130 });
   if (errors.length || result.stopReason === "refusal") {
