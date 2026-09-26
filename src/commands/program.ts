@@ -3,17 +3,6 @@ import { DECREE_VERSION, DEFAULT_MODEL, DEFAULT_OUT_DIR } from "../version.js";
 import { handleError } from "../ui/errors.js";
 import { setQuiet, setVerbose } from "../ui/logger.js";
 import { c, detectColor, setColorEnabled } from "../ui/theme.js";
-import { chatCommand } from "./chat.js";
-import { doctorCommand } from "./doctor.js";
-import { evalCommand } from "./eval.js";
-import { generateCommand } from "./generate.js";
-import { initCommand } from "./init.js";
-import { planCommand } from "./plan.js";
-import { refineCommand } from "./refine.js";
-import { runCommand } from "./run.js";
-import { scanCommand } from "./scan.js";
-import { schemaCommand } from "./schema.js";
-import { toolsCommand } from "./tools.js";
 
 const EXAMPLES = `
 Examples:
@@ -80,17 +69,17 @@ export function buildProgram(): Command {
     .option("-y, --yes", "non-interactive: accept defaults (automatic when not a TTY)")
     .option("-f, --force", "re-plan an existing decree.json and overwrite files you edited")
     .option("--dry-run", "show what would be written without writing anything")
-    .action((dir, opts, cmd) => initCommand(dir, opts, cmd));
+    .action((dir, opts, cmd) => import("./init.js").then((m) => m.initCommand(dir, opts, cmd)));
 
   program
     .command("scan [dir]")
     .description("scan the project and write .decree/profile.json")
     .option("--json", "print the profile as JSON")
-    .action((dir, opts, cmd) => scanCommand(dir, opts, cmd));
+    .action((dir, opts, cmd) => import("./scan.js").then((m) => m.scanCommand(dir, opts, cmd)));
 
   plannerOptions(program.command("plan [dir]").description("scan + plan, writing decree.json only (no code)"))
     .option("-y, --yes", "don't ask before overwriting decree.json")
-    .action((dir, opts, cmd) => planCommand(dir, opts, cmd));
+    .action((dir, opts, cmd) => import("./plan.js").then((m) => m.planCommand(dir, opts, cmd)));
 
   program
     .command("generate")
@@ -101,7 +90,7 @@ export function buildProgram(): Command {
     .option("-f, --force", "overwrite files you edited")
     .option("--dry-run", "show what would change without writing")
     .option("--clean", "remove previously generated files that are no longer produced")
-    .action((opts, cmd) => generateCommand(opts, cmd));
+    .action((opts, cmd) => import("./generate.js").then((m) => m.generateCommand(opts, cmd)));
 
   program
     .command("refine <feedback...>")
@@ -112,7 +101,7 @@ export function buildProgram(): Command {
     .option("--no-generate", "only update decree.json")
     .option("-f, --force", "overwrite generated files you edited")
     .option("--dry-run", "show the diff without writing")
-    .action((feedback, opts, cmd) => refineCommand(feedback, opts, cmd));
+    .action((feedback, opts, cmd) => import("./refine.js").then((m) => m.refineCommand(feedback, opts, cmd)));
 
   program
     .command("chat")
@@ -120,7 +109,7 @@ export function buildProgram(): Command {
     .option("-m, --model <id>", "override the model in decree.json")
     .option("--api-key <key>", "Anthropic API key")
     .option("--dry-run-tools", "tools describe what they would do instead of executing")
-    .action((opts, cmd) => chatCommand(opts, cmd));
+    .action((opts, cmd) => import("./chat.js").then((m) => m.chatCommand(opts, cmd)));
 
   program
     .command("run [prompt...]")
@@ -130,7 +119,7 @@ export function buildProgram(): Command {
     .option("-m, --model <id>", "override the model in decree.json")
     .option("--api-key <key>", "Anthropic API key")
     .option("--dry-run-tools", "tools describe what they would do instead of executing")
-    .action((prompt, opts, cmd) => runCommand(prompt, opts, cmd));
+    .action((prompt, opts, cmd) => import("./run.js").then((m) => m.runCommand(prompt, opts, cmd)));
 
   program
     .command("eval")
@@ -141,7 +130,7 @@ export function buildProgram(): Command {
     .option("-m, --model <id>", "override the agent model")
     .option("--api-key <key>", "Anthropic API key")
     .option("--json", "print results as JSON")
-    .action((opts, cmd) => evalCommand(opts, cmd));
+    .action((opts, cmd) => import("./eval.js").then((m) => m.evalCommand(opts, cmd)));
 
   program
     .command("doctor")
@@ -149,18 +138,18 @@ export function buildProgram(): Command {
     .option("--online", "also check that api.anthropic.com is reachable")
     .option("-o, --out <dir>", "output directory", DEFAULT_OUT_DIR)
     .option("--json", "print results as JSON")
-    .action((opts, cmd) => doctorCommand(opts, cmd));
+    .action((opts, cmd) => import("./doctor.js").then((m) => m.doctorCommand(opts, cmd)));
 
   program
     .command("tools")
     .description("list the tools in decree.json")
     .option("--json", "print tools as JSON")
-    .action((opts, cmd) => toolsCommand(opts, cmd));
+    .action((opts, cmd) => import("./tools.js").then((m) => m.toolsCommand(opts, cmd)));
 
   program
     .command("schema")
     .description("print the JSON schema for decree.json")
-    .action(() => schemaCommand());
+    .action(() => import("./schema.js").then((m) => m.schemaCommand()));
 
   for (const sub of program.commands) {
     sub.exitOverride();
