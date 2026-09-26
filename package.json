@@ -2,31 +2,6 @@
   "name": "decree-harness",
   "version": "0.1.0",
   "description": "Generate an optimal AI agent harness for your codebase. Scan, plan, generate, run, eval.",
-  "type": "module",
-  "bin": {
-    "decree-harness": "dist/cli.js",
-    "decree": "dist/cli.js"
-  },
-  "main": "dist/index.js",
-  "exports": {
-    ".": "./dist/index.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "engines": {
-    "node": ">=18.17"
-  },
-  "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
-  },
   "keywords": [
     "agent",
     "harness",
@@ -38,10 +13,50 @@
     "mcp",
     "claude-code"
   ],
-  "license": "MIT",
+  "homepage": "https://github.com/TCYTseven/decree-app#readme",
+  "bugs": {
+    "url": "https://github.com/TCYTseven/decree-app/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TCYTseven/decree-app.git"
+  },
+  "license": "MIT",
+  "author": "",
+  "type": "module",
+  "bin": {
+    "decree-harness": "dist/cli.js",
+    "decree": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "smoke": "bash scripts/smoke.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

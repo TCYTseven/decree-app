@@ -22,7 +22,7 @@ export interface Check {
   hint?: string;
 }
 
-export function nodeVersionOk(version = process.versions.node, min = [18, 17, 0]): boolean {
+export function nodeVersionOk(version = process.versions.node, min = [20, 12, 0]): boolean {
   const v = version.split(".").map((n) => Number.parseInt(n, 10));
   for (let i = 0; i < 3; i++) {
     if ((v[i] ?? 0) > min[i]) return true;
@@ -54,7 +54,7 @@ export async function runChecks(root: string, opts: { online?: boolean; out?: st
   checks.push(
     nodeVersionOk()
       ? { name: "Node.js", status: "ok", detail: `v${process.versions.node}` }
-      : { name: "Node.js", status: "fail", detail: `v${process.versions.node}`, hint: "decree-harness needs Node >= 18.17" },
+      : { name: "Node.js", status: "fail", detail: `v${process.versions.node}`, hint: "decree-harness needs Node >= 20.12" },
   );
 
   try {

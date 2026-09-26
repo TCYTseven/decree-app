@@ -73,7 +73,7 @@ Useful flags: `--yes` (non-interactive), `--offline`, `--model <id>`,
 
 ## Setup
 
-Node 18.17 or newer.
+Node 20.12 or newer.
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...     # or put it in .env
@@ -114,6 +114,7 @@ npm test          # vitest
 npm run typecheck
 npm run build     # tsup -> dist/
 node dist/cli.js --help
+npm run smoke     # pack the tarball, install it (local, global, npx) and run init on a fixture
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module layout and the

@@ -124,7 +124,7 @@ with `[REDACTED:<NAME>]` before it is sent to the model.
 ## Conventions
 
 - ESM TypeScript, `module: NodeNext`: relative imports end in `.js`.
-- Node >= 18.17. No `__dirname` (use `fileURLToPath(import.meta.url)`).
+- Node >= 20.12. No `__dirname` (use `fileURLToPath(import.meta.url)`).
 - Dependencies available: `@anthropic-ai/sdk`, `commander`, `@clack/prompts`, `picocolors`, `zod` (v4),
   `yaml`, `fast-glob`, `ignore`. Dev: `typescript`, `tsup`, `vitest`, `@types/node`.
 - Tests: vitest, `test/<area>.test.ts`; fixtures in `test/fixtures/`; shared helpers in
