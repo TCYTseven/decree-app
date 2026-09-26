@@ -60,6 +60,16 @@ export function redact(text: string, names: string[], env: NodeJS.ProcessEnv = p
   return out;
 }
 
+/**
+ * Redact with the names the agent loop uses (`guardrails.redactEnv` + ANTHROPIC_API_KEY).
+ * Tools call this on raw output BEFORE truncating it, so a cut can never leave a
+ * partial secret that the later whole-output redaction would miss.
+ */
+export function redactFor(ctx: ToolContext, text: string): string {
+  const names = [...new Set([...(ctx.spec.guardrails.redactEnv ?? []), "ANTHROPIC_API_KEY"])];
+  return redact(text, names, envOf(ctx));
+}
+
 /** True when `child` is `parent` or inside it (both absolute, normalized). */
 export function isInside(parent: string, child: string): boolean {
   const rel = path.relative(parent, child);

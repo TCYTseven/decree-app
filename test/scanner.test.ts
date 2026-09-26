@@ -337,6 +337,9 @@ describe("scanProject: walking", () => {
     expect(p.openapiSpecs).toEqual([]);
     expect(p.dependencies.some((d) => d.name === "express")).toBe(false);
     expect(p.database).toBeUndefined();
+    // Terminal plumbing read by the CLI UI is not app configuration.
+    expect(p.envVars.map((v) => v.name)).not.toEqual(expect.arrayContaining(["TERM_PROGRAM"]));
+    expect(p.envVars.some((v) => v.name === "WT_SESSION")).toBe(false);
     const total = p.keyFiles.reduce((n, k) => n + k.excerpt.length, 0);
     expect(total).toBeLessThanOrEqual(31000);
     expect(p.keyFiles.length).toBeLessThanOrEqual(12);

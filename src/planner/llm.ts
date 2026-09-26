@@ -106,7 +106,7 @@ export async function planWithLLM(profile: ProjectProfile, opts: LLMPlanOptions)
   const heuristic: HeuristicPlan = planHeuristicDetailed(profile, { goal: opts.goal, targets: opts.targets, model: opts.model });
   const base = heuristic.spec;
   const goal = base.goal;
-  const candidates = renderCandidates(base.tools);
+  const candidates = renderCandidates(heuristic.candidateTools);
   const gctx: GroundingContext = { profile, httpDefaults: heuristic.httpDefaults };
   const d = heuristic.httpDefaults;
   const facts = [

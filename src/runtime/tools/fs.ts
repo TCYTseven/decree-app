@@ -22,7 +22,9 @@ export const LIST_MAX_RESULTS = 500;
 export const SEARCH_MAX_MATCHES = 200;
 export const SEARCH_MAX_FILE_BYTES = 1_000_000;
 const SEARCH_MAX_LINE_CHARS = 500;
-export const FS_IGNORE = ["**/node_modules/**", "**/.git/**", "**/dist/**", "**/.decree/**"];
+/** Directory names every fs tool skips (dependencies, VCS, build output, virtualenvs, tool caches). Keep in sync with the generators. */
+export const FS_IGNORED_DIRS = ["node_modules", ".git", "dist", ".decree", ".venv", "venv", "__pycache__", ".next", ".nuxt", ".svelte-kit", ".turbo", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache"];
+export const FS_IGNORE = FS_IGNORED_DIRS.map((d) => `**/${d}/**`);
 
 function fsBase(tool: ToolSpec, ctx: ToolContext): string {
   const root = tool.fs?.root ?? ".";

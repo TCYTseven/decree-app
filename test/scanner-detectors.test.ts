@@ -6,6 +6,8 @@ import { detectRoutes, normalizePath } from "../src/scanner/routes/index.js";
 import { parseToml } from "../src/scanner/toml.js";
 import { renderTree } from "../src/scanner/tree.js";
 import { sanitizeRemote } from "../src/scanner/git.js";
+import { readmeSummary } from "../src/scanner/docs.js";
+import { projectName } from "../src/scanner/index.js";
 
 const routes = (files: Record<string, string>) =>
   detectRoutes(new Map(Object.entries(files))).map((e) => `${e.method} ${e.path}`);
@@ -423,5 +425,20 @@ describe("renderTree", () => {
     expect(lines[0]).toBe("proj/");
     expect(lines.length).toBeLessThanOrEqual(150);
     expect(t).toMatch(/… \d+ more/);
+  });
+});
+
+describe("project identity (QA regressions)", () => {
+  it("replaces generic monorepo root package names with the directory name", () => {
+    expect(projectName("@api/source", "/work/conduit")).toBe("conduit");
+    expect(projectName("@acme/workspace", "/work/src")).toBe("acme");
+    expect(projectName("acme-orders", "/work/x")).toBe("acme-orders");
+    expect(projectName(undefined, "/work/tasks-api")).toBe("tasks-api");
+  });
+
+  it("summarizes the README intro, skipping feature bullets, blockquote headings and later sections", () => {
+    expect(readmeSummary("# App\n\n- ⚡ FastAPI\n- 🧰 SQLModel\n\n## How to use\n\nClick the button.\n")).toBeUndefined();
+    expect(readmeSummary("# App\n\n> ### Example Node codebase for [RealWorld](https://x.y).\n")).toBe("Example Node codebase for RealWorld.");
+    expect(readmeSummary("# App\n\nInventory service.\n\n- one\n")).toBe("Inventory service.");
   });
 });

@@ -191,15 +191,15 @@ describe("generateClaudeCode", () => {
       mcpServers: {
         "acme-ops-agent": {
           command: "npx",
-          args: ["tsx", "agent/mcp-server/src/server.ts"],
+          args: ["--prefix", "agent/mcp-server", "tsx", "agent/mcp-server/src/server.ts"],
           env: { ACME_BASE_URL: "${ACME_BASE_URL:-http://localhost:3000}", ACME_API_TOKEN: "${ACME_API_TOKEN}" },
         },
       },
     });
     const custom = JSON.parse(gen(sampleSpec(), { outDir: "tools/harness/", decreeVersion: "x" })[".mcp.json"]!);
-    expect(custom.mcpServers["acme-ops-agent"].args[1]).toBe("tools/harness/mcp-server/src/server.ts");
+    expect(custom.mcpServers["acme-ops-agent"].args[3]).toBe("tools/harness/mcp-server/src/server.ts");
     const abs = JSON.parse(gen(sampleSpec(), { outDir: "/abs/agent", decreeVersion: "x" })[".mcp.json"]!);
-    expect(abs.mcpServers["acme-ops-agent"].args[1]).toBe("agent/mcp-server/src/server.ts");
+    expect(abs.mcpServers["acme-ops-agent"].args[3]).toBe("agent/mcp-server/src/server.ts");
   });
 
   it("without http tools: no .mcp.json, no API skill, no mcp tools anywhere", () => {

@@ -503,8 +503,10 @@ function renderMcpJson(spec: HarnessSpec, opts: GenerateOptions): string {
     env[name] = def !== undefined && !isSecret && !/[}$]/.test(def) ? `\${${name}:-${def}}` : `\${${name}}`;
   }
   const server: Record<string, unknown> = {
+    // `--prefix` resolves tsx from the MCP server's own node_modules; a bare `npx tsx` from the repo root would
+    // try to download tsx at every cold start (and hang offline or under a minimal env).
     command: "npx",
-    args: ["tsx", `${harnessDir(opts)}/mcp-server/src/server.ts`],
+    args: ["--prefix", `${harnessDir(opts)}/mcp-server`, "tsx", `${harnessDir(opts)}/mcp-server/src/server.ts`],
   };
   if (Object.keys(env).length) server.env = env;
   return JSON.stringify({ mcpServers: { [mcpServerName(spec)]: server } }, null, 2) + "\n";
@@ -531,7 +533,7 @@ function renderReadme(spec: HarnessSpec, opts: GenerateOptions, main: string, fi
     out.push(
       "### MCP server",
       "",
-      `The API tools are served by the generated MCP server (\`${dir}/mcp-server\`). \`.mcp.json\` starts it with \`npx tsx ${dir}/mcp-server/src/server.ts\`, which assumes the default output dir \`${dir}/\`; edit the path if you generated elsewhere. Install its dependencies once (\`cd ${dir}/mcp-server && npm install\`) and export ${envs.map((e) => `\`${e}\``).join(", ")} before starting \`claude\`. Approve the server when Claude Code asks (or keep \`enabledMcpjsonServers\` in settings).`,
+      `The API tools are served by the generated MCP server (\`${dir}/mcp-server\`). \`.mcp.json\` starts it with \`npx --prefix ${dir}/mcp-server tsx ${dir}/mcp-server/src/server.ts\` from the repository root, which assumes the default output dir \`${dir}/\`; edit the path if you generated elsewhere. Install its dependencies once (\`cd ${dir}/mcp-server && npm install\`) and export ${envs.map((e) => `\`${e}\``).join(", ")} before starting \`claude\`. Approve the server when Claude Code asks (or keep \`enabledMcpjsonServers\` in settings).`,
       "",
     );
   }

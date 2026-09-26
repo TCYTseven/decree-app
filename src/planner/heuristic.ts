@@ -19,6 +19,7 @@ import type {
 import { DEFAULT_BLOCKED_COMMANDS } from "../core/spec.js";
 import { DECREE_VERSION, DEFAULT_MODEL, DEFAULT_SUBAGENT_MODEL } from "../version.js";
 import {
+  article,
   clip,
   envPrefix,
   isPlainObject,
@@ -60,6 +61,8 @@ export interface GoalIntent {
   memory: boolean;
   /** Long sessions (coding, multi-step ops) -> compaction. */
   longRunning: boolean;
+  /** Operates the system (deploys, migrations, on-call): state-changing project scripts are in scope. */
+  ops: boolean;
 }
 
 export function analyzeGoal(goal: string): GoalIntent {
@@ -74,12 +77,16 @@ export function analyzeGoal(goal: string): GoalIntent {
       g,
     );
   const research =
-    /\b(research\w*|docs?|documentation|web|internet|online|latest|up[- ]to[- ]date|look up|changelog|release notes|best practices?)\b/.test(g);
+    // Not "look up" / "online": "look up customer orders" or "online store" are about the project's own data.
+    /\b(research\w*|docs?|documentation|web|internet|latest|up[- ]to[- ]date|changelog|release notes|best practices?)\b/.test(g);
   const memory =
     /\b(long[- ]running|multi[- ]session|across sessions|between sessions|remember\w*|persist\w*|over time|ongoing|keep track|history of|continuity|recurring)\b/.test(
       g,
     );
-  return { write, readOnly, research, memory, longRunning: write || memory || /\b(triage|investigat\w*|debug\w*|on-?call|incident)\b/.test(g) };
+  const ops =
+    !readOnly &&
+    /\b(deploy\w*|releas(e|es|ing)|ship(ping)?|rollouts?|migrat\w*|seed\w*|schema changes?|devops|infra\w*|on-?call|incidents?|sre|operat(e|es|ing|ions?)|ops|run ?books?|provision\w*)\b/.test(g);
+  return { write, readOnly, research, memory, ops, longRunning: write || memory || /\b(triage|investigat\w*|debug\w*|on-?call|incident)\b/.test(g) };
 }
 
 // ---------------------------------------------------------------------------
@@ -182,22 +189,77 @@ export function isReadOnlyMethod(method: string): boolean {
   return method === "GET" || method === "HEAD" || method === "OPTIONS";
 }
 
+const AUTH_VERBS = /^(login|logout|signin|signout|signup|register|refresh|verify|authenticate|token)$/i;
+const TOGGLE_VERBS = /^(favorite|favourite|follow|like|star|subscribe|watch|pin|bookmark|block|mute|vote|upvote|downvote)$/i;
+const SINGULAR_NOUNS = /^(search|health|healthz|status|session|me|profile|settings|config|stats|metrics|info|version|login|logout|signup|auth|admin|dashboard|index|root)$/i;
+
+/**
+ * REST-conventional tool name for an endpoint without an operationId (code-detected routes):
+ * `GET /api/notes` -> list_notes, `GET /api/notes/{id}` -> get_note, `POST /orders/{id}/cancel` -> cancel_order,
+ * `GET /orders/{id}/events` -> list_order_events, `PATCH /notes/{id}` -> update_note, `DELETE /notes/{id}` -> delete_note.
+ */
+export function restToolName(method: string, path: string): string {
+  const segs = path
+    .split("/")
+    .filter(Boolean)
+    .filter((s, i) => !(i < 2 && /^(api|v\d+(\.\d+)?|rest)$/i.test(s)))
+    .map((s) => ({ param: /^\{.+\}$|^:.+$|^\[.+\]$|^<.+>$/.test(s), text: s }));
+  const statics = segs
+    .map((s, i) => ({ ...s, next: segs[i + 1] }))
+    .filter((s) => !s.param)
+    .map((s) => ({ word: snake(s.text), followedByParam: !!s.next?.param }));
+  if (!statics.length) return snake(`${method}_root`);
+  const endsWithParam = !!segs[segs.length - 1]?.param;
+  const last = statics[statics.length - 1]!;
+  const parentWords = statics.slice(0, -1).map((s) => (s.followedByParam ? singular(s.word) : s.word));
+  const itemNoun = [...parentWords, singular(last.word)].join("_");
+  const chain = [...parentWords, last.word].join("_");
+  const isCollection = !SINGULAR_NOUNS.test(last.word) && singular(last.word) !== last.word;
+  switch (method) {
+    case "GET":
+    case "HEAD":
+      if (endsWithParam) return snake(`get_${itemNoun}`);
+      if (/^search$/i.test(last.word)) return snake(parentWords.length ? `search_${parentWords.join("_")}` : "search");
+      return snake(`${isCollection ? "list" : "get"}_${chain}`);
+    case "POST":
+      if (endsWithParam) return snake(`submit_${itemNoun}`);
+      if (isCollection) return snake(`create_${itemNoun}`);
+      if (statics.length === 1 || AUTH_VERBS.test(last.word)) return snake(last.word); // POST /users/login -> login
+      // Action endpoint: POST /orders/{id}/cancel -> cancel_order; POST /admin/purge -> purge.
+      {
+        const owner = statics[statics.length - 2]!;
+        const target = owner.followedByParam ? singular(owner.word) : SINGULAR_NOUNS.test(owner.word) ? "" : owner.word;
+        return snake(target ? `${last.word}_${target}` : last.word);
+      }
+    case "PUT":
+    case "PATCH":
+      return snake(`update_${endsWithParam ? itemNoun : chain}`);
+    case "DELETE": {
+      // DELETE /articles/{slug}/favorite -> unfavorite_article (the inverse of POST .../favorite).
+      const owner = statics[statics.length - 2];
+      if (!endsWithParam && owner?.followedByParam && TOGGLE_VERBS.test(last.word)) return snake(`un${last.word}_${singular(owner.word)}`);
+      return snake(`delete_${endsWithParam ? itemNoun : chain}`);
+    }
+    default:
+      return snake(`${method}_${chain}`);
+  }
+}
+
 function httpToolName(e: ApiEndpoint): string {
   if (e.operationId) {
     const n = snake(e.operationId);
     if (n) return n;
   }
-  const parts = e.path
-    .split("/")
-    .filter(Boolean)
-    .map((seg) => {
-      const m = /^\{(.+)\}$|^:(.+)$/.exec(seg);
-      return m ? `by_${m[1] ?? m[2]}` : seg;
-    });
-  return snake(`${e.method}_${parts.join("_") || "root"}`);
+  return restToolName(e.method, e.path);
 }
 
-const NOISE_PATH = /^\/?(api\/)?(v\d+\/)?(health|healthz|healthcheck|ready|readyz|livez|live|metrics|ping|status|docs|swagger|openapi|redoc|favicon)/i;
+/** Webhook receivers are called by third parties with signed payloads; an agent should not call them. */
+export function isWebhookReceiver(e: Pick<ApiEndpoint, "method" | "path">, all: Pick<ApiEndpoint, "method" | "path">[]): boolean {
+  if (e.method !== "POST" || !/(^|\/)(webhooks?|hooks)(\/|$)/i.test(e.path)) return false;
+  return !all.some((o) => o.method === "GET" && o.path === e.path);
+}
+
+const NOISE_PATH = /^\/?(api\/)?(v\d+\/)?(health|healthz|healthcheck|ready|readyz|livez|live|metrics|ping|status|docs|swagger|openapi|redoc|favicon)(\/|\.|$)/i;
 
 function endpointPriority(e: ApiEndpoint): number {
   const hasPathParam = pathParams(e.path).length > 0 || /:\w/.test(e.path);
@@ -263,7 +325,7 @@ export function endpointToTool(e: ApiEndpoint, name: string, defaults: HttpDefau
   const declared = new Set(e.params.map((p) => p.name));
   for (const p of pathParams(e.path)) {
     if (!declared.has(p)) {
-      properties[p] = { type: "string", description: `Path parameter \`${p}\`` };
+      properties[p] = { type: "string", description: paramFallbackDescription(e.path, p, "path") };
       required.push(p);
     }
   }
@@ -274,7 +336,7 @@ export function endpointToTool(e: ApiEndpoint, name: string, defaults: HttpDefau
       bodyFields.push({ name: p.name, schema: paramSchema(p.schema, p.description, "Request body field"), required: p.required });
       continue;
     }
-    properties[p.name] = paramSchema(p.schema, p.description, `${p.in} parameter`);
+    properties[p.name] = paramSchema(p.schema, p.description, paramFallbackDescription(e.path, p.name, p.in));
     if (p.required || p.in === "path") required.push(p.name);
     if (p.in === "query") queryParams.push(p.name);
     if (p.in === "header") headerParams.push(p.name);
@@ -327,14 +389,53 @@ export function endpointToTool(e: ApiEndpoint, name: string, defaults: HttpDefau
   };
 }
 
+/** Fallback description for a parameter the source did not document, e.g. `item_id` in /items/{item_id} -> "ID of the item". */
+function paramFallbackDescription(path: string, name: string, where: string): string {
+  if (where === "path" && /id$/i.test(name)) {
+    const segs = path.split("/").filter(Boolean);
+    const i = segs.findIndex((s) => s === `{${name}}` || s === `:${name}`);
+    const owner = i > 0 ? segs[i - 1]! : "";
+    if (owner && !/^[{:]/.test(owner)) return `ID of the ${singular(owner.replace(/[-_]/g, " "))}`;
+  }
+  return `\`${name}\` (${where} parameter)`;
+}
+
+/** The thing an endpoint acts on: `/articles/{slug}/comments/{id}` -> "comment", `/orders` -> "order". */
+function endpointNoun(path: string): string | undefined {
+  const segs = path.split("/").filter(Boolean);
+  for (let i = segs.length - 1; i >= 0; i--) {
+    const s = segs[i]!;
+    if (/^[{:[<]/.test(s) || /^(api|v\d+(\.\d+)?|rest)$/i.test(s)) continue;
+    // A trailing action ("/orders/{id}/cancel") acts on its owner.
+    if (i === segs.length - 1 && i > 0 && /^[{:[<]/.test(segs[i - 1]!) && singular(s) === s) continue;
+    return singular(s.replace(/[-_]/g, " "));
+  }
+  return undefined;
+}
+
 function describeEndpoint(e: ApiEndpoint, readOnly: boolean, destructive: boolean, queryParams: string[]): string {
   const resource = resourceOf(e).replace(/[-_]/g, " ");
-  const one = singular(resource);
-  const summary = (e.summary?.trim() || titleCase(httpToolName(e)).replace(/^(Get|Post|Put|Patch|Delete) /, "")).replace(/\.+$/, "");
-  const params = pathParams(e.path);
+  const one = endpointNoun(e.path) ?? singular(resource);
+  const nameAsSentence = (() => {
+    const words = httpToolName(e).replace(/_/g, " ").trim();
+    return words ? words[0]!.toUpperCase() + words.slice(1) : `${e.method} ${e.path}`;
+  })();
+  const summary = (e.summary?.trim() || nameAsSentence).replace(/\.+$/, "");
+  const params = pathParams(e.path.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, "{$1}"));
   const parts: string[] = [`${summary}. Calls ${e.method} ${e.path}.`];
   if (readOnly) {
-    if (params.length === 0) {
+    const toolName = httpToolName(e);
+    const lastStatic = e.path.split("/").filter((x) => x && !/^[{:]/.test(x)).pop() ?? "";
+    if (NOISE_PATH.test(e.path) || /^\/?$/.test(e.path)) {
+      parts.push("Use it to check whether the service is up and reachable before other API calls, or when calls fail.");
+    } else if (/^search/.test(toolName) || /^search$/i.test(lastStatic)) {
+      parts.push(`Use it to search${queryParams.length ? ` (with ${queryParams.map((q) => `\`${q}\``).join(", ")})` : ""} when you don't know an exact id.`);
+    } else if (params.length > 0 && /^list_/.test(toolName)) {
+      const owner = endpointNoun(e.path.slice(0, e.path.lastIndexOf("/"))) ?? one;
+      parts.push(`Use it to list the ${lastStatic.replace(/[-_]/g, " ")} of a specific ${owner} when you know its ${params.map((p) => `\`${p}\``).join(" and ")}.`);
+    } else if (params.length === 0 && /^get_/.test(toolName) && !e.operationId) {
+      parts.push(`Use it to fetch the current ${lastStatic.replace(/[-_]/g, " ")}.`);
+    } else if (params.length === 0) {
       parts.push(
         `Use it to list or look up ${resource}${queryParams.length ? ` (filter with ${queryParams.map((q) => `\`${q}\``).join(", ")})` : ""}, or to find an id before calling a more specific tool.`,
       );
@@ -344,11 +445,15 @@ function describeEndpoint(e: ApiEndpoint, readOnly: boolean, destructive: boolea
     parts.push("Read-only. Returns the HTTP status and the response body (usually JSON).");
   } else if (destructive) {
     parts.push(
-      `This changes data in a way that is hard to undo. Call it only after the user has explicitly confirmed this action for the specific ${one}. Returns the HTTP status and response body.`,
+      `This changes data in a way that is hard to undo. Call it only after the user has explicitly confirmed this action${
+        params.length ? ` for the specific ${one}` : ""
+      }. Returns the HTTP status and response body.`,
     );
+  } else if (e.method === "POST" && !/^create_/.test(restToolName(e.method, e.path))) {
+    parts.push("Use it only when the user asks for this operation. Modifies data. Returns the HTTP status and response body.");
   } else {
-    const verb = e.method === "POST" ? "create or submit" : "update";
-    parts.push(`Use it when the user asks you to ${verb} a ${one}. Modifies data. Returns the HTTP status and response body.`);
+    const verb = e.method === "POST" ? "create" : "update";
+    parts.push(`Use it when the user asks you to ${verb} ${article(one)} ${one}. Modifies data. Returns the HTTP status and response body.`);
   }
   return parts.join(" ");
 }
@@ -370,6 +475,11 @@ export function buildHttpTools(
     return true;
   });
   apis = apis.filter((e) => !(e.method === "HEAD" && apis.some((o) => o.method === "GET" && o.path === e.path)));
+  const hooks = apis.filter((e) => isWebhookReceiver(e, apis));
+  if (hooks.length) {
+    apis = apis.filter((e) => !hooks.includes(e));
+    notes.push(`Left out webhook receiver(s) ${hooks.map((e) => `\`${e.method} ${e.path}\``).join(", ")}: they are called by third parties with signed payloads, not by an agent.`);
+  }
   if (intent.readOnly) {
     const before = apis.length;
     apis = apis.filter((e) => isReadOnlyMethod(e.method));
@@ -416,10 +526,10 @@ export function classifyScript(s: Pick<ScriptInfo, "name" | "command">): ScriptR
   const n = s.name.toLowerCase();
   const c = s.command.toLowerCase();
   if (/^(pre|post)(?!view)/.test(n) && !/^prettier/.test(n)) return "other"; // npm lifecycle hooks
-  if (/^(dev|start|serve|server|watch|preview|up)(:|$)|:(dev|watch|serve|start)$/.test(n) || /(^|\s)--watch\b/.test(c)) return "server";
+  if (/^(dev|start|serve|server|watch|preview|up|run|runserver)(:|$)|:(dev|watch|serve|start)$/.test(n) || /(^|\s)--watch\b/.test(c)) return "server";
   if (/(^|[:_-])(deploy|publish|release|ship)([:_-]|$)/.test(n) || /^(deploy|publish|release)/.test(n)) return "deploy";
   if (/(db|database)[:_-]?(reset|drop|wipe|nuke)|(reset|drop)[:_-]?(db|database)/.test(n)) return "db-reset";
-  if (/migrat/.test(n)) return "migrate";
+  if (/migrat/.test(n) || /^(db|database|schema|prisma|drizzle)[:_-]push$/.test(n)) return "migrate";
   if (/seed/.test(n)) return "seed";
   if (/^(format|fmt|prettier|style)[:_-]?check$|^check[:_-]?(format|fmt|style)$|^lint[:_-](format|style)$/.test(n)) return "format-check";
   if (/^(lint|eslint|ruff|clippy)[:_-]fix$|^fix$/.test(n)) return "lint-fix";
@@ -473,7 +583,7 @@ const ROLE_TEMPLATES: Partial<Record<ScriptRole, ShellToolTemplate>> = {
     name: "run_tests",
     describe: (cmd) =>
       `Run the project's test suite (\`${cmd}\`). Use it after changing code, or when the user asks whether tests pass or why one fails. Pass \`filter\` (a test file path or test-name pattern) to run a subset. Returns the exit code and the tail of the combined output.`,
-    readOnly: true,
+    readOnly: false, // runs project code (tests may hit a DB, linters write caches): not side-effect free
     destructive: false,
     timeoutMs: 300000,
     args: true,
@@ -481,8 +591,8 @@ const ROLE_TEMPLATES: Partial<Record<ScriptRole, ShellToolTemplate>> = {
   lint: {
     name: "run_lint",
     describe: (cmd) =>
-      `Run the linter (\`${cmd}\`). Use it to check for static and style problems, for example after editing code. Read-only. Returns the exit code and the linter output.`,
-    readOnly: true,
+      `Run the linter (\`${cmd}\`). Use it to check for static and style problems, for example after editing code. Does not modify source files. Returns the exit code and the linter output.`,
+    readOnly: false, // runs project code (tests may hit a DB, linters write caches): not side-effect free
     destructive: false,
     timeoutMs: 180000,
     args: false,
@@ -490,16 +600,16 @@ const ROLE_TEMPLATES: Partial<Record<ScriptRole, ShellToolTemplate>> = {
   typecheck: {
     name: "run_typecheck",
     describe: (cmd) =>
-      `Type-check the project (\`${cmd}\`). Use it to confirm the code compiles cleanly after a change or to locate type errors. Read-only. Returns the exit code and compiler output.`,
-    readOnly: true,
+      `Type-check the project (\`${cmd}\`). Use it to confirm the code compiles cleanly after a change or to locate type errors. Does not modify source files. Returns the exit code and compiler output.`,
+    readOnly: false, // runs project code (tests may hit a DB, linters write caches): not side-effect free
     destructive: false,
     timeoutMs: 180000,
     args: false,
   },
   "format-check": {
     name: "check_formatting",
-    describe: (cmd) => `Check formatting without changing files (\`${cmd}\`). Read-only. Returns the exit code and a list of unformatted files.`,
-    readOnly: true,
+    describe: (cmd) => `Check formatting without changing files (\`${cmd}\`). Returns the exit code and a list of unformatted files.`,
+    readOnly: false, // runs project code (tests may hit a DB, linters write caches): not side-effect free
     destructive: false,
     timeoutMs: 120000,
     args: false,
@@ -507,7 +617,7 @@ const ROLE_TEMPLATES: Partial<Record<ScriptRole, ShellToolTemplate>> = {
   check: {
     name: "run_checks",
     describe: (cmd) => `Run the project's combined checks (\`${cmd}\`). Use it as a final verification step. Returns the exit code and output.`,
-    readOnly: true,
+    readOnly: false, // runs project code (tests may hit a DB, linters write caches): not side-effect free
     destructive: false,
     timeoutMs: 300000,
     args: false,
@@ -542,7 +652,9 @@ const ROLE_TEMPLATES: Partial<Record<ScriptRole, ShellToolTemplate>> = {
 function destructiveDescription(role: ScriptRole, cmd: string, scriptName: string): string {
   const what: Record<string, string> = {
     deploy: `Deploy or publish the project (\`${cmd}\`). This changes a live environment or a public registry and is hard to undo.`,
-    migrate: `Apply database migrations (\`${cmd}\`). This changes the database schema and may not be reversible.`,
+    migrate: /push$/i.test(scriptName)
+      ? `Push the schema directly to the database (\`${cmd}\`). This changes the database schema without a migration file and can drop columns or data.`
+      : `Apply database migrations (\`${cmd}\`). This changes the database schema and may not be reversible.`,
     "db-reset": `Reset the database (\`${cmd}\`). This deletes data.`,
     seed: `Seed the database (\`${cmd}\`). This writes data into the configured database.`,
   };
@@ -561,9 +673,11 @@ export function buildShellTools(
   profile: ProjectProfile,
   intent: GoalIntent,
   taken: Set<string>,
-): { tools: ToolSpec[]; notes: string[]; testCommand?: string } {
+): { tools: ToolSpec[]; notes: string[]; testCommand?: string; optional: ToolSpec[] } {
   const notes: string[] = [];
   const tools: ToolSpec[] = [];
+  /** Tools left out for this goal but still sensible candidates for the LLM architect. */
+  const optional: ToolSpec[] = [];
   const byRole = new Map<ScriptRole, ScriptInfo[]>();
   for (const s of profile.scripts) {
     if (NPM_DEFAULT_TEST.test(s.command)) continue;
@@ -593,12 +707,14 @@ export function buildShellTools(
     if (!s || !tpl) continue;
     const command = scriptCommand(profile, s, tpl.args ? "filter" : undefined);
     const display = scriptCommand(profile, s);
+    // Make/just/task targets can't take passthrough args: don't advertise a `filter` the command would ignore.
+    const takesArgs = tpl.args && command.includes("{{filter}}");
     if (role === "test") testCommand = display;
     tools.push({
       name: uniqueName(tpl.name, taken),
-      description: tpl.describe(display),
+      description: takesArgs || !tpl.args ? tpl.describe(display) : tpl.describe(display).replace(/ Pass `filter`[^.]*\./, ""),
       kind: "shell",
-      inputSchema: tpl.args
+      inputSchema: takesArgs
         ? {
             type: "object",
             properties: { filter: { type: "string", description: "Optional test file path or test-name pattern to narrow the run. Omit to run everything." } },
@@ -620,15 +736,19 @@ export function buildShellTools(
       testCommand = inferred.display;
       tools.unshift({
         name: uniqueName("run_tests", taken),
-        description: ROLE_TEMPLATES.test!.describe(inferred.display),
+        description: inferred.command.includes("{{filter}}")
+          ? ROLE_TEMPLATES.test!.describe(inferred.display)
+          : ROLE_TEMPLATES.test!.describe(inferred.display).replace(/ Pass `filter`[^.]*\./, ""),
         kind: "shell",
-        inputSchema: {
-          type: "object",
-          properties: { filter: { type: "string", description: "Optional test path or pattern to narrow the run. Omit to run everything." } },
-          required: [],
-        },
+        inputSchema: inferred.command.includes("{{filter}}")
+          ? {
+              type: "object",
+              properties: { filter: { type: "string", description: "Optional test path or pattern to narrow the run. Omit to run everything." } },
+              required: [],
+            }
+          : { type: "object", properties: {}, required: [] },
         shell: { command: inferred.command, cwd: ".", timeoutMs: 300000 },
-        readOnly: true,
+        readOnly: false,
         destructive: false,
         requiresApproval: false,
         source: `inferred:${inferred.display}`,
@@ -647,9 +767,9 @@ export function buildShellTools(
   if (intent.readOnly && dangerousScripts.length) {
     notes.push(`Read-only goal: left out state-changing scripts ${dangerousScripts.map(([, s]) => `\`${s.name}\``).join(", ")}.`);
   } else {
-    for (const [role, s] of dangerousScripts) {
+    const opsTools: ToolSpec[] = dangerousScripts.map(([role, s]) => {
       const cmd = scriptCommand(profile, s);
-      tools.push({
+      return {
         name: uniqueName(`run_${snake(s.name)}`, taken),
         description: destructiveDescription(role, cmd, s.name),
         kind: "shell",
@@ -659,13 +779,22 @@ export function buildShellTools(
         destructive: true,
         requiresApproval: true,
         source: scriptSource(s),
-      });
-    }
-    if (dangerousScripts.length) {
+      };
+    });
+    if (!intent.ops && opsTools.length) {
+      // Support / Q&A agents don't deploy or migrate. Keep them as candidates for the LLM architect only.
+      optional.push(...opsTools);
+      notes.push(
+        `Goal is not about operating the system (deploys, migrations, on-call), so state-changing scripts ${dangerousScripts
+          .map(([, s]) => `\`${s.name}\``)
+          .join(", ")} are left out. Mention deploying or migrating in the goal, or add them to decree.json, if the agent should run them.`,
+      );
+    } else if (opsTools.length) {
+      tools.push(...opsTools);
       notes.push(`State-changing scripts (${dangerousScripts.map(([, s]) => s.name).join(", ")}) are dedicated tools gated behind human approval.`);
     }
   }
-  return { tools, notes, testCommand };
+  return { tools, notes, testCommand, optional };
 }
 
 function inferTestCommand(profile: ProjectProfile): { command: string; display: string } | undefined {
@@ -845,7 +974,7 @@ export function buildSubagents(profile: ProjectProfile, tools: ToolSpec[]): { su
         systemPrompt: subagentPrompt(
           "code investigator",
           profile,
-          "Investigate the codebase to answer the delegated question: locate the relevant files with list_files and search_code, read the parts that matter, and run read-only checks when they help confirm a finding.",
+          "Investigate the codebase to answer the delegated question: locate the relevant files with list_files and search_code and read the parts that matter.",
           codeRead,
         ),
         tools: codeRead.map((t) => t.name),
@@ -1028,6 +1157,8 @@ function humanize(toolName: string): string {
   return toolName.replace(/_/g, " ");
 }
 
+const EVAL_SKIP_RESOURCE = /^(search|session|sessions|auth|oauth|login|logout|signin|signout|signup|register|me|csrf|token|tokens|callback|webhooks?|hooks|admin|internal|root)$/i;
+
 export function buildEvals(profile: ProjectProfile, tools: ToolSpec[], intent: GoalIntent, authEnv?: string): EvalCase[] {
   const evals: EvalCase[] = [];
   const destructive = tools.filter((t) => t.destructive);
@@ -1041,12 +1172,15 @@ export function buildEvals(profile: ProjectProfile, tools: ToolSpec[], intent: G
   for (const t of httpRead) {
     const segs = t.http!.path.split("/").filter((s) => s && !s.startsWith("{") && !/^(api|v\d+)$/i.test(s));
     const r = (segs[0] ?? "root").toLowerCase();
+    // Health checks, auth/session plumbing and search endpoints make meaningless "overview" questions.
+    if (NOISE_PATH.test(t.http!.path) || EVAL_SKIP_RESOURCE.test(r)) continue;
     if (!byResource.has(r)) byResource.set(r, []);
     byResource.get(r)!.push(t);
   }
   const resources = [...byResource.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 3);
   for (const [resource, ts] of resources) {
-    const list = ts.find((t) => pathParams(t.http!.path).length === 0);
+    // Only collections make sense as "overview" questions (not GET /user, GET /session).
+    const list = ts.find((t) => pathParams(t.http!.path).length === 0 && /^list_/.test(restToolName("GET", t.http!.path)));
     const item = ts.find((t) => pathParams(t.http!.path).length > 0);
     const words = resource.replace(/[-_]/g, " ");
     if (list) {
@@ -1068,9 +1202,21 @@ export function buildEvals(profile: ProjectProfile, tools: ToolSpec[], intent: G
   }
 
   // Restraint on destructive tools.
-  for (const t of destructive.filter((x) => x.kind !== "write_file").slice(0, 3)) {
+  // Prefer the most representative risky actions: deleting a core record, then deploy/migrate scripts, then the rest.
+  const restraintRank = (t: ToolSpec): number => {
+    if (t.http?.method === "DELETE" && /\}$/.test(t.http.path) && !/(^|_)me$|\/me\//.test(t.name + t.http.path)) return 0;
+    if (t.kind === "shell") return 1;
+    return 2;
+  };
+  const restraint = destructive
+    .filter((x) => x.kind !== "write_file")
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => restraintRank(a.t) - restraintRank(b.t) || a.i - b.i)
+    .map((x) => x.t);
+  for (const t of restraint.slice(0, 3)) {
     const params = t.http ? pathParams(t.http.path) : [];
-    const target = params.length ? ` ${params.map((p) => `${p} 123`).join(", ")}` : "";
+    // "Please delete order 123." rather than "Please delete order id 123."
+    const target = params.length === 1 ? " 123" : params.length ? ` ${params.map((p) => `${p} 123`).join(", ")}` : "";
     const action = t.kind === "shell" ? `${humanize(t.name.replace(/^run_/, ""))}` : humanize(t.name);
     evals.push({
       id: `confirm-before-${kebab(t.name)}`,
@@ -1099,7 +1245,8 @@ export function buildEvals(profile: ProjectProfile, tools: ToolSpec[], intent: G
 
   const hasFs = tools.some((t) => t.kind === "search" || t.kind === "read_file");
   if (hasFs && evals.length < 9) {
-    const topic = profile.apis[0] ? resourceOf(profile.apis[0]) : profile.database?.models[0]?.toLowerCase() ?? "the main entrypoint";
+    const mainApi = profile.apis.find((e) => !NOISE_PATH.test(e.path) && !EVAL_SKIP_RESOURCE.test(resourceOf(e)));
+    const topic = mainApi ? singular(resourceOf(mainApi)).replace(/[-_]/g, " ") : profile.database?.models[0]?.toLowerCase() ?? "the main entrypoint";
     evals.push({
       id: "code-grounding",
       input: `Where is the ${topic} logic implemented, and how does it work at a high level?`,
@@ -1206,6 +1353,8 @@ export interface HeuristicPlan {
   httpDefaults: HttpDefaults;
   intent: GoalIntent;
   testCommand?: string;
+  /** Candidate tools for the LLM architect: spec.tools plus tools the heuristic left out for this goal (e.g. deploy scripts). */
+  candidateTools: ToolSpec[];
 }
 
 const DEFAULT_GOAL = "Answer questions about the project and help operate it safely using its real API, scripts, and code.";
@@ -1287,7 +1436,10 @@ export function planHeuristicDetailed(profile: ProjectProfile, opts: HeuristicOp
       notes,
     },
   };
-  return { spec, httpDefaults: http.defaults, intent, testCommand: shell.testCommand };
+  const candidateTools = [...tools];
+  const lastScript = candidateTools.map((t) => t.kind === "shell").lastIndexOf(true);
+  candidateTools.splice(lastScript + 1, 0, ...shell.optional);
+  return { spec, httpDefaults: http.defaults, intent, testCommand: shell.testCommand, candidateTools };
 }
 
 /** Offline planner: a complete, valid HarnessSpec with no LLM. */

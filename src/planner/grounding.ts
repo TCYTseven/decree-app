@@ -258,7 +258,11 @@ export function groundDraft(raw: Record<string, unknown>, ctx: GroundingContext)
       if (ok.length) expect[key] = ok;
       else delete expect[key];
     }
-    for (const key of Object.keys(expect)) if (expect[key] === null || expect[key] === "") delete expect[key];
+    // The strict output schema makes every check key required, so "none" arrives as [] or "".
+    for (const key of Object.keys(expect)) {
+      const v = expect[key];
+      if (v === null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && v.length === 0)) delete expect[key];
+    }
     const hasCheck = Object.keys(expect).length > 0;
     if (!hasCheck) {
       notes.push(`Dropped eval "${String(e.id)}": no checks left after grounding.`);

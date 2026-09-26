@@ -38,6 +38,7 @@ export function readmeSummary(readme: string | undefined): string | undefined {
   const lines = readme.split(/\r?\n/);
   const para: string[] = [];
   let inCode = false;
+  let sawIntro = false;
   for (const raw of lines) {
     const l = raw.trim();
     if (l.startsWith("```")) {
@@ -49,11 +50,19 @@ export function readmeSummary(readme: string | undefined): string | undefined {
       if (para.length) break;
       continue;
     }
+    // Only the intro describes the project; later sections are setup steps ("Click the Use this template button").
+    if (/^##+\s/.test(l) && sawIntro) break;
+    if (/^#\s/.test(l) || !/^(#|!\[|\[!\[|<|---|===|\||>\s*\[!)/.test(l)) sawIntro = true;
     if (/^(#|!\[|\[!\[|<|---|===|\||>\s*\[!)/.test(l)) {
       if (para.length) break;
       continue;
     }
-    para.push(l.replace(/^>\s*/, ""));
+    // Feature bullet lists ("- ⚡ FastAPI for ...") make a poor one-line summary; look for prose instead.
+    if (/^([-*+]|\d+[.)])\s/.test(l)) {
+      if (para.length) break;
+      continue;
+    }
+    para.push(l.replace(/^>\s*/, "").replace(/^#+\s+/, ""));
   }
   const s = para.join(" ").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*_`]/g, "").trim();
   return s ? (s.length > 300 ? s.slice(0, 297) + "..." : s) : undefined;

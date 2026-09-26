@@ -24,6 +24,9 @@ function binding(t: ToolSpec): Record<string, unknown> {
     const s: Record<string, unknown> = { command: t.shell.command };
     if (t.shell.cwd !== undefined) s.cwd = t.shell.cwd;
     if (t.shell.timeoutMs !== undefined) s.timeoutMs = t.shell.timeoutMs;
+    const props = t.inputSchema?.properties ?? {};
+    const allowFlags = Object.keys(props).filter((k) => (props[k] as Record<string, unknown> | undefined)?.["x-allow-flags"] === true);
+    if (allowFlags.length) s.allowFlags = allowFlags;
     b.shell = s;
   }
   if (["read_file", "write_file", "list_files", "search"].includes(t.kind)) {
@@ -81,7 +84,8 @@ export interface ToolBinding {
     bodyParam?: string;
     auth?: { type: "bearer" | "header" | "none"; env?: string; header?: string };
   };
-  shell?: { command: string; cwd?: string; timeoutMs?: number };
+  /** allowFlags: params whose values may start with "-" (schema "x-allow-flags": true). */
+  shell?: { command: string; cwd?: string; timeoutMs?: number; allowFlags?: string[] };
   fs?: { root: string; maxBytes?: number };
 }
 
@@ -101,11 +105,15 @@ type Input = Record<string, unknown>;
 // Output hygiene
 // ---------------------------------------------------------------------------
 
-/** Replace the value of every env var in guardrails.redactEnv with [REDACTED:NAME]. */
+/**
+ * Replace the value of every env var in guardrails.redactEnv with [REDACTED:NAME]
+ * (values shorter than 4 chars are ignored). Tools also call it before truncating,
+ * so a cut never leaves part of a secret behind.
+ */
 export function redact(text: string): string {
   const pairs = GUARDRAILS.redactEnv
     .map((name) => [name, process.env[name] ?? ""] as const)
-    .filter(([, value]) => value.length > 0)
+    .filter(([, value]) => value.length >= 4)
     .sort((a, b) => b[1].length - a[1].length);
   let out = text;
   for (const [name, value] of pairs) out = out.split(value).join("[REDACTED:" + name + "]");
@@ -114,6 +122,11 @@ export function redact(text: string): string {
 
 function result(text: string, isError = false): ToolResult {
   return { content: [{ type: "text", text: redact(text) }], ...(isError ? { isError: true } : {}) };
+}
+
+/** Own-property lookup: a param named "constructor" must not read Object.prototype. */
+function get(input: Input, key: string): unknown {
+  return Object.hasOwn(input, key) ? input[key] : undefined;
 }
 
 function asText(v: unknown): string {
@@ -156,6 +169,8 @@ export async function runTool(name: string, input: Input): Promise<ToolResult> {
 
 const HTTP_MAX_CHARS = 50_000;
 const HTTP_TIMEOUT_MS = 60_000;
+/** Same-origin redirects followed per request; cross-origin redirects are never followed. */
+const HTTP_MAX_REDIRECTS = 5;
 
 async function runHttp(tool: ToolBinding, input: Input): Promise<ToolResult> {
   const h = tool.http!;
@@ -167,7 +182,7 @@ async function runHttp(tool: ToolBinding, input: Input): Promise<ToolResult> {
   let dotSegment: string | null = null;
   const urlPath = h.path.replace(/\{([^}]+)\}/g, (_m, key: string) => {
     consumed.add(key);
-    const v = input[key];
+    const v = get(input, key);
     if (v === undefined || v === null) {
       missing = key;
       return "";
@@ -182,7 +197,7 @@ async function runHttp(tool: ToolBinding, input: Input): Promise<ToolResult> {
   const url = new URL(base.replace(/\/+$/, "") + urlPath);
   for (const key of h.queryParams ?? []) {
     consumed.add(key);
-    const v = input[key];
+    const v = get(input, key);
     if (v === undefined || v === null) continue;
     if (Array.isArray(v)) for (const item of v) url.searchParams.append(key, asText(item));
     else url.searchParams.set(key, asText(v));
@@ -191,7 +206,7 @@ async function runHttp(tool: ToolBinding, input: Input): Promise<ToolResult> {
   const headers: Record<string, string> = { accept: "application/json, text/plain;q=0.9, */*;q=0.8" };
   for (const key of h.headerParams ?? []) {
     consumed.add(key);
-    const v = input[key];
+    const v = get(input, key);
     if (v !== undefined && v !== null) headers[key] = asText(v);
   }
   const auth = h.auth;
@@ -207,7 +222,7 @@ async function runHttp(tool: ToolBinding, input: Input): Promise<ToolResult> {
   if (["POST", "PUT", "PATCH", "DELETE"].includes(h.method)) {
     let payload: unknown;
     if (h.bodyParam) {
-      payload = input[h.bodyParam];
+      payload = get(input, h.bodyParam);
     } else {
       const rest: Input = {};
       for (const [k, v] of Object.entries(input)) if (!consumed.has(k) && v !== undefined) rest[k] = v;
@@ -220,18 +235,54 @@ async function runHttp(tool: ToolBinding, input: Input): Promise<ToolResult> {
   }
 
   let res: Response;
+  let note: string | undefined;
   try {
-    res = await fetch(url, { method: h.method, headers, body, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
+    ({ res, note } = await fetchSameOrigin(url, { method: h.method, headers, body, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) }));
   } catch (err) {
     const msg = err instanceof Error ? (err.name === "TimeoutError" ? "timed out after 60s" : err.message) : String(err);
     return result("HTTP request failed: " + h.method + " " + url.toString() + ": " + msg, true);
   }
-  let text = await res.text();
+  // Redact before truncating: a cut through a secret would leave a piece redact() cannot match.
+  let text = redact(await res.text());
   if (text.length > HTTP_MAX_CHARS) {
     const extra = text.length - HTTP_MAX_CHARS;
     text = text.slice(0, HTTP_MAX_CHARS) + "\n…[truncated " + extra + " chars]";
   }
-  return result("HTTP " + res.status + " " + res.statusText + "\n" + text, res.status >= 400);
+  return result("HTTP " + res.status + " " + res.statusText + "\n" + (note ? note + "\n" : "") + text, res.status >= 400);
+}
+
+/**
+ * fetch with redirect: "manual", following at most HTTP_MAX_REDIRECTS redirects that stay
+ * on the same origin. A redirect to another origin is returned as-is with a note, so the
+ * auth header never leaves the API's origin. 303 (and 301/302 after POST) continue as GET.
+ */
+async function fetchSameOrigin(
+  start: URL,
+  init: { method: string; headers: Record<string, string>; body?: string; signal: AbortSignal },
+): Promise<{ res: Response; note?: string }> {
+  let url = start;
+  let { method, body } = init;
+  const headers = { ...init.headers };
+  for (let hop = 0; ; hop++) {
+    const res = await fetch(url, { method, headers, body, signal: init.signal, redirect: "manual" });
+    const location = res.headers.get("location");
+    if (res.status < 300 || res.status >= 400 || res.status === 304 || !location) return { res };
+    let next: URL;
+    try {
+      next = new URL(location, url);
+    } catch {
+      return { res, note: "[redirect not followed: invalid Location " + JSON.stringify(location) + "]" };
+    }
+    if (next.origin !== url.origin) return { res, note: "[redirect to " + next.href + " not followed: different origin]" };
+    if (hop >= HTTP_MAX_REDIRECTS) return { res, note: "[redirect not followed: more than " + HTTP_MAX_REDIRECTS + " redirects]" };
+    await res.body?.cancel().catch(() => undefined);
+    if (res.status === 303 || ((res.status === 301 || res.status === 302) && method === "POST")) {
+      if (method !== "HEAD") method = "GET";
+      body = undefined;
+      delete headers["content-type"];
+    }
+    url = next;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -245,13 +296,72 @@ export function shellQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
-/** Fill {{param}} placeholders with quoted values; missing params become "" and spaces collapse. */
-export function renderCommand(template: string, input: Input): string {
+const PLACEHOLDER_AT = /^\{\{\s*([A-Za-z0-9_-]+)\s*\}\}/;
+
+/**
+ * A quoted value is one literal shell word only where the placeholder is plain,
+ * top-level shell text. Returns why a placeholder is not (inside quotes, backticks,
+ * a parameter expansion or a comment; right after a dollar sign, a backslash or
+ * "$("), or null when the template is safe.
+ */
+export function unsafePlaceholder(template: string): string | null {
+  const stack: string[] = [];
+  const startsPlaceholder = (j: number) => PLACEHOLDER_AT.test(template.slice(j));
+  const BACKTICK = String.fromCharCode(96);
+  for (let i = 0; i < template.length; ) {
+    const match = PLACEHOLDER_AT.exec(template.slice(i));
+    if (match) {
+      if (stack.length > 0) return "{{" + match[1] + "}} is inside " + stack[stack.length - 1];
+      if (template[i - 1] === "$" || template[i - 1] === "\\" || /\$\(\s*$/.test(template.slice(0, i))) {
+        return "{{" + match[1] + "}} follows a dollar sign, a backslash or $(";
+      }
+      i += match[0].length;
+      continue;
+    }
+    const c = template[i]!;
+    const top = stack[stack.length - 1];
+    if (top === "single quotes" || top === "a comment") {
+      if (c === (top === "a comment" ? "\n" : "'")) stack.pop();
+      i++;
+      continue;
+    }
+    if (c === "\\") {
+      i += startsPlaceholder(i + 1) ? 1 : 2;
+      continue;
+    }
+    const expansion = c === "$" && template[i + 1] === "{" && !startsPlaceholder(i + 1);
+    if (top === "double quotes") {
+      if (c === '"') stack.pop();
+      else if (c === BACKTICK) stack.push("backticks");
+      else if (expansion) stack.push("a parameter expansion");
+    } else if (c === "'") stack.push("single quotes");
+    else if (c === '"') stack.push("double quotes");
+    else if (c === BACKTICK) {
+      if (top === "backticks") stack.pop();
+      else stack.push("backticks");
+    } else if (expansion) stack.push("a parameter expansion");
+    else if (c === "}" && top === "a parameter expansion") stack.pop();
+    else if (c === "#" && (i === 0 || /[\s;&|()<>]/.test(template[i - 1]!))) stack.push("a comment");
+    i += expansion ? 2 : 1;
+  }
+  return null;
+}
+
+/**
+ * Fill {{param}} placeholders with quoted values; missing params become "" and spaces collapse.
+ * Throws when the template is unsafe, or when a value starts with "-" (it would be read
+ * as an option) and the param is not in allowFlags.
+ */
+export function renderCommand(template: string, input: Input, allowFlags: string[] = []): string {
+  const unsafe = unsafePlaceholder(template);
+  if (unsafe) throw new Error("unsafe command template: " + unsafe + "; placeholders must be bare shell words.");
   const values: string[] = [];
   const marked = template.replace(/\{\{\s*([A-Za-z0-9_-]+)\s*\}\}/g, (_m, key: string) => {
-    const v = input[key];
+    const v = get(input, key);
     if (v === undefined || v === null) return "";
-    values.push(shellQuote(asText(v)));
+    const text = asText(v);
+    if (text.startsWith("-") && !allowFlags.includes(key)) throw new Error("parameter values may not start with '-' (" + key + ").");
+    values.push(shellQuote(text));
     return "\u0000" + (values.length - 1) + "\u0000";
   });
   return marked
@@ -262,7 +372,12 @@ export function renderCommand(template: string, input: Input): string {
 
 function runShell(tool: ToolBinding, input: Input): Promise<ToolResult> {
   const s = tool.shell!;
-  const command = renderCommand(s.command, input);
+  let command: string;
+  try {
+    command = renderCommand(s.command, input, s.allowFlags);
+  } catch (err) {
+    return Promise.resolve(result("Refused: " + (err instanceof Error ? err.message : String(err)), true));
+  }
   const blocked = GUARDRAILS.blockedCommands.find((b) => b.length > 0 && command.includes(b));
   if (blocked !== undefined) {
     return Promise.resolve(result("Refused: the command contains a blocked pattern (" + blocked + ").", true));
@@ -276,8 +391,12 @@ function runShell(tool: ToolBinding, input: Input): Promise<ToolResult> {
     const append = (chunk: Buffer) => {
       out += chunk.toString("utf8");
       if (out.length > SHELL_MAX_CHARS * 2) {
-        dropped += out.length - SHELL_MAX_CHARS;
-        out = out.slice(out.length - SHELL_MAX_CHARS);
+        // Redact before cutting: a cut through a secret would leave a piece redact() cannot match.
+        out = redact(out);
+        if (out.length > SHELL_MAX_CHARS) {
+          dropped += out.length - SHELL_MAX_CHARS;
+          out = out.slice(out.length - SHELL_MAX_CHARS);
+        }
       }
     };
     // stdin is ignored: the server's own stdin is the MCP protocol channel.
@@ -305,6 +424,7 @@ function runShell(tool: ToolBinding, input: Input): Promise<ToolResult> {
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      out = redact(out);
       if (out.length > SHELL_MAX_CHARS) {
         dropped += out.length - SHELL_MAX_CHARS;
         out = out.slice(out.length - SHELL_MAX_CHARS);

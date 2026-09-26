@@ -75,6 +75,21 @@ export interface Guardrails {
 
 export const GUARDRAILS: Guardrails = ${tsLiteral(guardrails)};
 
+/**
+ * Replace the value of every env var in GUARDRAILS.redactEnv with [REDACTED:<NAME>]
+ * (longest values first; values shorter than 4 chars are ignored). Tools call it
+ * before truncating output so a cut never leaves part of a secret behind.
+ */
+export function redact(text: string): string {
+  const pairs = GUARDRAILS.redactEnv
+    .map((name) => [name, process.env[name] ?? ""] as const)
+    .filter(([, value]) => value.length >= 4)
+    .sort((a, b) => b[1].length - a[1].length);
+  let out = text;
+  for (const [name, value] of pairs) out = out.split(value).join(\`[REDACTED:\${name}]\`);
+  return out;
+}
+
 export interface ContextStrategy {
   /** Prompt caching: a breakpoint on the system prompt plus automatic caching of the conversation tail. */
   caching: boolean;

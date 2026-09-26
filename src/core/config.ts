@@ -3,6 +3,7 @@ import path from "node:path";
 import type { HarnessSpec, ProjectProfile } from "./types.js";
 import { validateSpec, specJsonSchema } from "./spec.js";
 import { CACHE_DIRNAME, DEFAULT_OUT_DIR, SPEC_FILENAME } from "../version.js";
+import { maskSecrets } from "./mask-secrets.js";
 
 export const SCHEMA_REF = `./${CACHE_DIRNAME}/schema.json`;
 
@@ -136,7 +137,12 @@ export async function writeSchema(root: string): Promise<string> {
 export async function saveProfile(root: string, profile: ProjectProfile): Promise<string> {
   const { profilePath } = projectPaths(root);
   await ensureCacheDir(root);
-  await writeAtomic(profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+  // Never persist hardcoded secrets quoted from the README (keyfile excerpts are masked at scan time;
+  // the description may be the README's first paragraph).
+  const safe: ProjectProfile = { ...profile };
+  if (profile.description) safe.description = maskSecrets(profile.description);
+  if (profile.docs?.readme) safe.docs = { ...profile.docs, readme: maskSecrets(profile.docs.readme) };
+  await writeAtomic(profilePath, `${JSON.stringify(safe, null, 2)}\n`);
   return profilePath;
 }
 

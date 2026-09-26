@@ -178,6 +178,11 @@ def _block_type(block: Any) -> str | None:
     return block.get("type") if isinstance(block, dict) else getattr(block, "type", None)
 
 
+def _is_tool_block(block: Any) -> bool:
+    kind = _block_type(block) or ""
+    return kind in ("tool_use", "server_tool_use") or kind.endswith("_tool_result")
+
+
 def _text_of(content: Sequence[Any]) -> str:
     return "".join(getattr(block, "text", "") or "" for block in content if _block_type(block) == "text")
 
@@ -250,10 +255,22 @@ class Agent:
 
                 message = self._request()
                 turns += 1
-                # Always keep the full content: thinking, tool_use and compaction blocks.
-                self.messages.append({"role": "assistant", "content": message.content})
                 self._account(message)
                 stop_reason = message.stop_reason
+                content = list(message.content)
+                if stop_reason not in ("tool_use", "pause_turn", "end_turn"):
+                    # Tool calls of a truncated/refused/otherwise stopped turn will never be
+                    # answered: drop them (and server tool results, which would be orphans)
+                    # so the kept history stays valid for the next request.
+                    content = [block for block in content if not _is_tool_block(block)]
+                    if stop_reason in ("max_tokens", "refusal") and not any(
+                        _block_type(block) in ("text", "compaction") for block in content
+                    ):
+                        content = []
+                # Keep the full content otherwise: thinking, tool_use and compaction blocks.
+                # An empty assistant message is rejected once it is no longer the last turn.
+                if content:
+                    self.messages.append({"role": "assistant", "content": content})
                 text = _text_of(message.content)
                 if text.strip():
                     final_text = text
@@ -271,10 +288,12 @@ class Agent:
                     continue  # a server tool paused mid-turn; re-send and the API resumes
                 if stop_reason == "max_tokens":
                     notice = "The response hit max_tokens and was cut off; truncated tool calls were not run."
-                    self._close_dangling_tool_uses("Not executed: the response hit max_tokens before this call was complete.")
                 elif stop_reason == "refusal":
                     notice = self._refusal_notice(message)
-                    self._close_dangling_tool_uses("Not executed: the response ended in a refusal.")
+                elif stop_reason not in ("end_turn", "stop_sequence") and any(
+                    _block_type(block) == "tool_use" for block in message.content
+                ):
+                    notice = f"Stopped ({stop_reason}); tool calls in the last response were not run."
                 break
         except BaseException:
             self._close_dangling_tool_uses("Not executed: the run was interrupted.")
@@ -396,8 +415,14 @@ class Agent:
                 self._emit("approval_denied", id=block.id, name=block.name)
                 jobs.append(_Job(block, args, result=ToolResult.error(DECLINED_MESSAGE)))
             else:
-                run = (lambda t=tool, i=block.input: execute_tool(t, i, self.ctx))
-                jobs.append(_Job(block, args, run=run, parallel=tool.read_only))
+                jobs.append(
+                    _Job(
+                        block,
+                        args,
+                        run=lambda t=tool, i=block.input: execute_tool(t, i, self.ctx),
+                        parallel=tool.read_only,
+                    )
+                )
 
         self._execute(jobs)
 

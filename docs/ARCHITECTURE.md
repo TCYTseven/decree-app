@@ -56,19 +56,33 @@ Every `ToolSpec` has a `kind`. Implementations:
   `headerParams` keys go to headers. Body (JSON) for POST/PUT/PATCH/DELETE: `input[bodyParam]` when
   `bodyParam` is set, else every input key not consumed as path/query/header (omit body if empty).
   Auth: `bearer` -> `Authorization: Bearer ${env[auth.env]}`; `header` -> `${auth.header}: ${env[auth.env]}`.
-  Timeout 60s. Result text: `HTTP <status> <statusText>\n<body>`; body truncated to 50,000 chars
-  (append `\n…[truncated N chars]`). `isError` when status >= 400 or network failure.
+  Params are read from the input's own properties only (`Object.hasOwn`; never the prototype).
+  Redirects: fetched with `redirect: "manual"` (httpx: `follow_redirects=False`); at most 5 redirects
+  are followed and only when the `Location` stays on the same origin (scheme + host + port), so auth
+  headers never leave the API's origin. 303, and 301/302 after POST, continue as GET without a body.
+  A cross-origin (or 6th) redirect is not followed: the 3xx response is returned with a
+  `[redirect to <url> not followed: different origin]` line after the status line.
+  Timeout 60s. Result text: `HTTP <status> <statusText>\n<body>`; body redacted (see Output hygiene)
+  and then truncated to 50,000 chars (append `\n…[truncated N chars]`). `isError` when status >= 400
+  or network failure.
 - **shell**: `{{param}}` placeholders replaced with the POSIX single-quote-escaped input value;
   missing/undefined optional params become an empty string, then collapse repeated spaces.
+  Placeholders must be bare top-level shell words. `validateSpec` rewrites `"{{x}}"` / `'{{x}}'` to
+  `{{x}}` and rejects a placeholder inside quotes, backticks, `${...}` or a `#` comment, or right after
+  `$`, `\` or `$(`; every renderer re-checks the template with the same quote-tracking scan and refuses
+  (isError, `unsafe command template: ...`) instead of substituting. A substituted value that starts
+  with `-` is refused (`parameter values may not start with '-'`) unless the input schema property sets
+  `"x-allow-flags": true`. Params are read from own properties only.
   Refuse (isError) if the final command contains any `guardrails.blockedCommands` substring.
   Run with `/bin/sh -c` in `projectRoot/shell.cwd`, timeout `shell.timeoutMs ?? 120000`.
-  Result: `exit code: <n>\n<stdout+stderr>`; keep the LAST 30,000 chars when truncating.
+  Result: `exit code: <n>\n<stdout+stderr>`; output is redacted first, then the LAST 30,000 chars are kept.
   `isError` when exit code != 0 or timeout.
 - **read_file / write_file / list_files / search**: all paths resolved against
   `projectRoot/fs.root`; refuse anything that escapes it (lexical check + realpath when it exists)
   and anything outside `guardrails.allowedPaths`. `read_file` returns content (max `fs.maxBytes ?? 200000`
   bytes, then truncated note). `write_file` mkdir -p's and returns `wrote <n> bytes to <path>`.
-  `list_files` globs (`pattern`), ignores `node_modules`, `.git`, `dist`, `.decree`, max 500 results,
+  `list_files` globs (`pattern`), ignores `node_modules`, `.git`, `dist`, `.decree`, `.venv`, `venv`, `__pycache__`,
+  `.next`, `.nuxt`, `.svelte-kit`, `.turbo`, `.tox`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache` (same list for `search`), max 500 results,
   one per line. `search` takes `query` (regex) + optional `glob`, skips binary files and files > 1MB,
   max 200 matches formatted `path:line: text`.
 - **web_search**: Anthropic server tool `{ type: "web_search_20260209", name: "web_search", max_uses: 5 }`.
@@ -102,7 +116,15 @@ at most `guardrails.maxTurns` turns, and returns the subagent's final text as th
 ### Output hygiene
 
 Any occurrence of the value of an env var listed in `guardrails.redactEnv` is replaced in tool output
-with `[REDACTED:<NAME>]` before it is sent to the model.
+with `[REDACTED:<NAME>]` before it is sent to the model. Values shorter than 4 chars are ignored;
+longer values are replaced first. http and shell tools redact the raw output BEFORE truncating it, so a
+cut can never leave part of a secret behind.
+
+Scanner excerpts (`keyFiles[].excerpt`, and the README as sent to the planner / saved in
+`.decree/profile.json`) mask hardcoded secrets with `[REDACTED]` (`src/core/mask-secrets.ts`).
+
+Claude Code target: `Bash(<prefix>:*)` rules whose prefix has fewer than 2 words or is a generic runner
+(`sh -c`, `npm run`, `npx`, `make`, `uv run`, ...) go to `ask`, never `allow`.
 
 ### Model request shape
 

@@ -5,6 +5,7 @@
  */
 import type { ApiEndpoint, JSONSchema, ProjectProfile } from "../core/types.js";
 import { clip, isPlainObject } from "./util.js";
+import { maskSecrets } from "../core/mask-secrets.js";
 
 export interface DigestOptions {
   maxChars?: number;
@@ -64,7 +65,7 @@ interface Budgets {
 function renderCore(p: ProjectProfile, b: Budgets): string {
   const out: string[] = [];
   out.push(`# Project: ${p.name}`);
-  if (p.description) out.push(p.description.trim());
+  if (p.description) out.push(maskSecrets(p.description.trim())); // may be quoted from the README
   const facts: string[] = [];
   if (p.languages.length) facts.push(`Languages: ${p.languages.slice(0, 6).map((l) => `${l.name} (${l.files} files, ${fmtBytes(l.bytes)})`).join(", ")}`);
   if (p.frameworks.length) facts.push(`Frameworks: ${p.frameworks.join(", ")}`);
@@ -126,7 +127,8 @@ function renderCore(p: ProjectProfile, b: Budgets): string {
   }
 
   out.push(section("File tree", "```\n" + clip(p.tree, b.tree) + "\n```"));
-  if (p.docs.readme) out.push(section("README (excerpt)", clip(p.docs.readme, b.readme)));
+  // Mask hardcoded secrets (keyfile excerpts are masked by the scanner; the README is masked here).
+  if (p.docs.readme) out.push(section("README (excerpt)", clip(maskSecrets(p.docs.readme), b.readme)));
   if (p.docs.files.length > 1) out.push(section("Other docs", clip(p.docs.files.join(", "), 800)));
   return out.filter(Boolean).join("\n");
 }

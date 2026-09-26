@@ -1,5 +1,6 @@
 import type { GeneratedFile, GenerateOptions, HarnessSpec, Target, ToolSpec } from "../../core/types.js";
 import { blockquote, codeBlock, demoteHeadings, inlineCode, oneLine, renderTable } from "./markdown.js";
+import { pythonPackageName, scriptName } from "../python/py.js";
 import { describeBinding, displayShellCommand, envDefault, needsApproval, toolEnvRefs, yesNo } from "./spec-utils.js";
 
 export * from "./markdown.js";
@@ -11,8 +12,9 @@ const TARGET_RUN: Record<Target, { dir: string; label: string; cmd: string; note
   python: {
     dir: "python",
     label: "Python agent",
-    cmd: "cd python && uv sync && uv run python -m agent",
-    note: "or install with pip; see `python/README.md` for the exact entrypoint",
+    // Placeholder; the real command depends on the console-script name and outDir (see targetRun()).
+    cmd: "cd python && uv sync && uv run agent",
+    note: "or install with pip; see `python/README.md`",
   },
   mcp: { dir: "mcp-server", label: "MCP server", cmd: "cd mcp-server && npm install && npm start", note: "stdio server; register it in any MCP client" },
   "claude-code": {
@@ -22,6 +24,25 @@ const TARGET_RUN: Record<Target, { dir: string; label: string; cmd: string; note
     note: "plus `claude-code/.mcp.json` when present; see `claude-code/README.md`",
   },
 };
+
+/**
+ * Run line for a target. The Python agent's tools operate on the current directory (or `--root`), unlike the
+ * TypeScript and MCP targets which default to the project the harness was generated for, so point `--root`
+ * back at the project when the command `cd`s into the generated folder.
+ */
+function targetRun(t: Target, spec: HarnessSpec, opts: GenerateOptions): { dir: string; label: string; cmd: string; note?: string } {
+  const r = TARGET_RUN[t];
+  if (t !== "python") return r;
+  const script = scriptName(spec.name);
+  const parts = opts.outDir.replace(/\\/g, "/").split("/").filter((p) => p !== "" && p !== ".");
+  const relative = !opts.outDir.startsWith("/") && !/^[A-Za-z]:/.test(opts.outDir) && !parts.includes("..") && parts.length > 0;
+  const root = relative ? Array.from({ length: parts.length + 1 }, () => "..").join("/") : undefined;
+  return {
+    ...r,
+    cmd: `cd python && uv sync && uv run ${script}${root ? ` --root ${root}` : ""}`,
+    note: `or \`pip install -e .\` and run \`${script}\` (or \`python -m ${pythonPackageName(spec.name)}\`) from the project root; see \`python/README.md\``,
+  };
+}
 
 const TARGET_ORDER: Target[] = ["typescript", "python", "mcp", "claude-code"];
 
@@ -127,7 +148,7 @@ function renderReadme(spec: HarnessSpec, opts: GenerateOptions): string {
   const targets = orderedTargets(spec);
   if (targets.length === 0) out.push("_No targets selected._", "");
   for (const t of targets) {
-    const r = TARGET_RUN[t];
+    const r = targetRun(t, spec, opts);
     out.push(`- **${r.label}** (\`${r.dir}/\`): ${inlineCode(r.cmd)}${r.note ? ` (${r.note})` : ""}`);
   }
   if (targets.length) out.push("");

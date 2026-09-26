@@ -102,7 +102,7 @@ FS_DEFAULT_MAX_BYTES = 200_000
 LIST_MAX_RESULTS = 500
 SEARCH_MAX_MATCHES = 200
 SEARCH_MAX_FILE_BYTES = 1_000_000
-IGNORED_DIRS = frozenset({"node_modules", ".git", "dist", ".decree"})
+IGNORED_DIRS = frozenset({"node_modules", ".git", "dist", ".decree", ".venv", "venv", "__pycache__", ".next", ".nuxt", ".svelte-kit", ".turbo", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache"})
 SERVER_TOOL_MAX_USES = 5
 
 # --------------------------------------------------------------------------

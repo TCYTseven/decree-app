@@ -13,7 +13,12 @@ export function apiInputSchema(tool: ToolSpec): JSONSchema {
 
 function binding(tool: ToolSpec): Record<string, unknown> {
   if (tool.kind === "http" && tool.http) return { ...tool.http };
-  if (tool.kind === "shell" && tool.shell) return { ...tool.shell };
+  if (tool.kind === "shell" && tool.shell) {
+    // Params whose values may start with "-" (schema "x-allow-flags": true).
+    const props = tool.inputSchema?.properties ?? {};
+    const allowFlags = Object.keys(props).filter((k) => (props[k] as Record<string, unknown> | undefined)?.["x-allow-flags"] === true);
+    return allowFlags.length ? { ...tool.shell, allowFlags } : { ...tool.shell };
+  }
   if (tool.fs) return { ...tool.fs };
   return {};
 }

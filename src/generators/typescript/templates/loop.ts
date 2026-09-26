@@ -6,7 +6,7 @@ export function loopTs(): string {
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./client.js";
-import { CONTEXT, GUARDRAILS, MODEL, type Effort } from "./config.js";
+import { CONTEXT, GUARDRAILS, MODEL, redact, type Effort } from "./config.js";
 import type { Session } from "./session.js";
 import type { AgentEvent, Approver, ToolContext, ToolEntry, ToolResult } from "./types.js";
 import { validateInput } from "./validate.js";
@@ -66,15 +66,8 @@ export function needsApproval(tool: ToolEntry): boolean {
   }
 }
 
-/** Replace the value of every env var in GUARDRAILS.redactEnv with [REDACTED:<NAME>]. */
-export function redact(text: string): string {
-  let out = text;
-  for (const name of GUARDRAILS.redactEnv) {
-    const value = process.env[name];
-    if (value && value.length >= 4) out = out.split(value).join(\`[REDACTED:\${name}]\`);
-  }
-  return out;
-}
+/** Secret redaction lives in config.ts (tools use it before truncating); re-exported here. */
+export { redact };
 
 export async function runLoop(opts: LoopOptions): Promise<LoopResult> {
   const messages = [...opts.messages];
@@ -108,20 +101,34 @@ export async function runLoop(opts: LoopOptions): Promise<LoopResult> {
 
     if (message.stop_reason === "refusal") {
       // A refusal can cut a tool call off mid-input: never run it or keep it in history.
+      const kept = withoutToolBlocks(message.content);
+      if (kept.some((b) => b.type === "text" || b.type === "compaction")) messages.push({ role: "assistant", content: kept });
       const details = message.stop_details;
       const reason = details?.explanation ?? details?.category ?? "no details";
       emit({ type: "notice", message: \`Claude declined to continue (\${reason}).\` });
       break;
     }
     if (message.stop_reason === "max_tokens") {
-      // Tool input may be truncated, so do not run it; keep a plain-text answer.
-      if (toolUses.length === 0) messages.push({ role: "assistant", content: message.content });
+      // Tool input may be truncated, so do not run it; keep the rest (plain-text answer).
+      const kept = withoutToolBlocks(message.content);
+      if (kept.some((b) => b.type === "text" || b.type === "compaction")) messages.push({ role: "assistant", content: kept });
       emit({ type: "notice", message: "Stopped: the response hit max_tokens (GUARDRAILS.maxOutputTokensPerTurn)." });
       break;
     }
 
+    const known = ["tool_use", "pause_turn", "end_turn", "compaction"];
+    if (message.stop_reason !== null && !known.includes(message.stop_reason) && toolUses.length > 0) {
+      // Any other stop (e.g. model_context_window_exceeded) leaves tool calls that will never
+      // be answered; an unanswered tool_use would make the kept history invalid.
+      const kept = withoutToolBlocks(message.content);
+      if (kept.length > 0) messages.push({ role: "assistant", content: kept });
+      emit({ type: "notice", message: \`Stopped (\${message.stop_reason}); \${toolUses.length} tool call(s) were not run.\` });
+      break;
+    }
+
     // Always keep the full content: thinking, compaction and server-tool blocks must round-trip.
-    messages.push({ role: "assistant", content: message.content });
+    // An empty assistant message is rejected by the API once it is no longer the last turn.
+    if (message.content.length > 0) messages.push({ role: "assistant", content: message.content });
 
     if (message.stop_reason === "pause_turn" || message.stop_reason === "compaction") {
       continue; // the server paused mid-turn; resending the conversation resumes it
@@ -258,6 +265,15 @@ function recordServerToolCalls(
     emit({ type: "tool_call", id: block.id, name: block.name, input: block.input });
     session.toolCalls.push({ name: block.name, input: block.input, output: "(run by Anthropic)", isError: false, agent });
   }
+}
+
+/**
+ * Content without tool calls and server tool results: used when a turn ends in a way
+ * that leaves its tool calls unanswerable (a server tool result without its
+ * server_tool_use would be an orphan too).
+ */
+function withoutToolBlocks(content: Anthropic.Beta.BetaContentBlock[]): Anthropic.Beta.BetaContentBlock[] {
+  return content.filter((b) => b.type !== "tool_use" && b.type !== "server_tool_use" && !b.type.endsWith("_tool_result"));
 }
 
 function textOf(content: Anthropic.Beta.BetaContentBlock[]): string {

@@ -94,6 +94,30 @@ function isIgnored(matchers: Matcher[], rel: string, isDir: boolean): boolean {
 }
 
 /**
+ * What decree itself generated here (from `.decree/manifest.json`): whole output directories below the root and
+ * individual generated files. The scanner must not mistake the generated harness (its package.json, pyproject,
+ * env vars, CLI) for the user's project on the next scan.
+ */
+async function loadGeneratedOutputs(root: string): Promise<{ dirs: Set<string>; files: Set<string> }> {
+  const dirs = new Set<string>();
+  const files = new Set<string>();
+  try {
+    const m = JSON.parse(await fs.readFile(path.join(root, ".decree", "manifest.json"), "utf8")) as {
+      outputs?: Record<string, { files?: Record<string, string> }>;
+    };
+    for (const [key, out] of Object.entries(m.outputs ?? {})) {
+      const dir = path.posix.normalize(key.replace(/\\/g, "/")).replace(/\/+$/, "");
+      if (dir.startsWith("..") || path.posix.isAbsolute(dir)) continue;
+      if (dir && dir !== ".") dirs.add(dir);
+      for (const f of Object.keys(out?.files ?? {})) files.add(dir && dir !== "." ? `${dir}/${f}` : f);
+    }
+  } catch {
+    // no manifest, or unreadable: nothing generated to skip
+  }
+  return { dirs, files };
+}
+
+/**
  * Breadth-first walk of `root`, honoring .gitignore files (root and nested),
  * .git/info/exclude and .decreeignore. Breadth-first so that when the file cap
  * is hit, the top-level structure (manifests, configs) is still captured.
@@ -103,6 +127,7 @@ export async function walkProject(root: string, maxFiles: number): Promise<WalkR
   const dirs: string[] = [];
   let truncated = false;
 
+  const generated = await loadGeneratedOutputs(root);
   const rootMatchers: Matcher[] = [];
   for (const f of [".gitignore", ".git/info/exclude", ".decreeignore"]) {
     const ig = await loadIgnoreFile(path.join(root, f));
@@ -133,11 +158,11 @@ export async function walkProject(root: string, maxFiles: number): Promise<WalkR
     for (const e of entries) {
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
-        if (ALWAYS_SKIP_DIRS.has(e.name) || e.name.endsWith(".egg-info")) continue;
+        if (ALWAYS_SKIP_DIRS.has(e.name) || e.name.endsWith(".egg-info") || generated.dirs.has(childRel)) continue;
         if (isIgnored(matchers, childRel, true)) continue;
         out.subdirs.push({ rel: childRel, matchers });
       } else if (e.isFile()) {
-        if (isIgnored(matchers, childRel, false)) continue;
+        if (generated.files.has(childRel) || isIgnored(matchers, childRel, false)) continue;
         fileEntries.push({ name: e.name, childRel });
       }
       // symlinks and special files are skipped (avoids cycles)

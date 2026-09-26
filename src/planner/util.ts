@@ -27,12 +27,19 @@ export function snake(s: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
+const ACRONYMS = new Set(["api", "ai", "ui", "ux", "db", "id", "sql", "http", "cli", "mcp", "sdk", "url", "crm", "erp", "cms", "llm", "ml", "ci", "cd"]);
+
 export function titleCase(s: string): string {
   return kebab(s)
     .split("-")
     .filter(Boolean)
-    .map((w) => w[0]!.toUpperCase() + w.slice(1))
+    .map((w) => (ACRONYMS.has(w) ? w.toUpperCase() : w[0]!.toUpperCase() + w.slice(1)))
     .join(" ");
+}
+
+/** "an" before a vowel sound (approximate), "a" otherwise. */
+export function article(word: string): string {
+  return /^[aeio]|^u(?!ni|se|sa|su)/i.test(word.trim()) ? "an" : "a";
 }
 
 /** Env-var prefix for the project, e.g. "acme-orders" -> "ACME_ORDERS". */

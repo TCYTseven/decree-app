@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeShellTemplate } from "./shell-template.js";
 import type { EvalCase, HarnessSpec, JSONSchema, SubagentSpec, Target, ToolKind, ToolSpec } from "./types.js";
 import { DECREE_VERSION, DEFAULT_MODEL, DEFAULT_SUBAGENT_MODEL } from "../version.js";
 
@@ -398,7 +399,21 @@ export function validateSpec(input: unknown): { ok: true; spec: HarnessSpec; war
 
     if (kind === "shell") {
       if (!t.shell) errors.push(`${at}.shell: Required for kind "shell"`);
-      else tool.shell = { ...t.shell };
+      else {
+        tool.shell = { ...t.shell };
+        // A {{param}} inside quotes (or after $, \, $( or in backticks) would let the quoted
+        // value break out of the author's quoting: strip quotes that wrap exactly one
+        // placeholder, reject anything else.
+        const norm = normalizeShellTemplate(t.shell.command);
+        if (norm.fixed.length) {
+          tool.shell.command = norm.command;
+          warnings.push(`${at}.shell.command: placeholders must be bare words (values are quoted automatically); normalized ${norm.fixed.join(", ")}.`);
+        }
+        for (const u of norm.unsafe) {
+          const where = u.unsafe === "$" || u.unsafe === "\\" || u.unsafe === "$(" ? `right after "${u.unsafe}"` : `inside ${u.unsafe}`;
+          errors.push(`${at}.shell.command: placeholder {{${u.name}}} is ${where}; placeholders must be bare shell words (unquoted; the value is shell-quoted automatically). Rewrite the command so {{${u.name}}} stands on its own.`);
+        }
+      }
     } else if (t.shell) warnings.push(`${at}.shell: ignored for kind "${kind}".`);
 
     if (FS_KINDS.has(kind)) tool.fs = t.fs ? { ...t.fs } : { root: "." };

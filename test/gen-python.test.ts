@@ -321,3 +321,17 @@ describe("generatePython", () => {
     if (!toml.stderr.includes("No module named 'tomllib'")) expect(toml.status, toml.stderr).toBe(0);
   });
 });
+
+describe("generated Python passes a default linter (QA regression)", () => {
+  const HAS_RUFF = spawnSync("ruff", ["--version"]).status === 0;
+  it("has no lambda assignments (ruff E731) and skips virtualenvs in fs tools", () => {
+    const files = byPath(generatePython(sampleSpec(), { outDir: "agent", decreeVersion: "x" }));
+    for (const [p, c] of Object.entries(files)) if (p.endsWith(".py")) expect(c, p).not.toMatch(/^\s*\w+ = \(?lambda\b/m);
+    expect(files["acme_ops_agent/config.py"]).toMatch(/IGNORED_DIRS = frozenset\(\{[^}]*"\.venv"/);
+  });
+  it.skipIf(!HAS_RUFF)("ruff check --isolated finds nothing (the user's own `ruff check .` sees agent/python)", () => {
+    const { dir } = render("ruff", sampleSpec());
+    const r = spawnSync("ruff", ["check", "--isolated", "--no-cache", dir], { encoding: "utf8" });
+    expect(r.stdout + r.stderr).toMatch(/All checks passed/);
+  });
+});

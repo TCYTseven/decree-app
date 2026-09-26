@@ -224,8 +224,8 @@ export function describeError(err: unknown): string {
   if (err instanceof Anthropic.RateLimitError) return "Rate limited by the Anthropic API; wait a moment and retry.";
   if (err instanceof Anthropic.APIConnectionError) return \`Could not reach the Anthropic API: \${err.message}\`;
   if (err instanceof Anthropic.APIError) return \`Anthropic API error (\${err.status ?? "no status"}): \${err.message}\`;
-  if (err instanceof Anthropic.AnthropicError && !process.env.ANTHROPIC_API_KEY) {
-    return \`\${err.message}\\nSet ANTHROPIC_API_KEY (in .env or your shell).\`;
+  if (err instanceof Anthropic.AnthropicError && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+    return "ANTHROPIC_API_KEY is not set. Put it in .env next to package.json or export it in your shell.";
   }
   if (err instanceof Error) return err.message;
   return String(err);

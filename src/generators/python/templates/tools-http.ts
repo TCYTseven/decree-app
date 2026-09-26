@@ -10,14 +10,16 @@ import os
 import re
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 
 import httpx
 
 from ..config import HTTP_MAX_BODY_CHARS, HTTP_TIMEOUT_S
-from .base import ToolResult, to_text, truncate_head
+from .base import ToolResult, redact, to_text, truncate_head
 
 BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+#: Same-origin redirects followed per request; cross-origin redirects are never followed.
+HTTP_MAX_REDIRECTS = 5
 _PATH_PARAM = re.compile(r"\{([^{}]+)\}")
 
 
@@ -89,10 +91,46 @@ def call_http(binding: Mapping[str, Any], args: Mapping[str, Any]) -> ToolResult
     except ValueError as exc:
         return ToolResult.error(str(exc))
     try:
-        response = httpx.request(**request, timeout=HTTP_TIMEOUT_S, follow_redirects=True)
+        response, note = request_same_origin(request)
     except httpx.HTTPError as exc:
         return ToolResult.error(f"HTTP request failed: {type(exc).__name__}: {exc}")
-    text = f"HTTP {response.status_code} {response.reason_phrase}\n" + truncate_head(response.text, HTTP_MAX_BODY_CHARS)
+    # Redact before truncating: a cut through a secret would leave a piece redact() cannot match.
+    body = truncate_head(redact(response.text), HTTP_MAX_BODY_CHARS)
+    text = f"HTTP {response.status_code} {response.reason_phrase}\n" + (f"{note}\n" if note else "") + body
     return ToolResult(text, response.status_code >= 400)
+
+
+def _origin(url: str) -> tuple[str, str, int | None]:
+    parsed = httpx.URL(url)
+    return (parsed.scheme, parsed.host, parsed.port)
+
+
+def request_same_origin(request: Mapping[str, Any]) -> tuple[Any, str | None]:
+    """httpx.request without automatic redirects: follow at most HTTP_MAX_REDIRECTS that stay
+    on the same origin. A redirect to another origin is returned as-is with a note, so the
+    auth header never leaves the API's origin. 303 (and 301/302 after POST) continue as GET.
+    """
+    current = dict(request)
+    for hop in range(HTTP_MAX_REDIRECTS + 1):
+        response = httpx.request(**current, timeout=HTTP_TIMEOUT_S, follow_redirects=False)
+        location = response.headers.get("location")
+        if not (300 <= response.status_code < 400) or response.status_code == 304 or not location:
+            return response, None
+        target = urljoin(str(response.request.url), location)
+        try:
+            same = _origin(target) == _origin(str(response.request.url))
+        except (httpx.InvalidURL, ValueError):
+            return response, f"[redirect not followed: invalid Location {location!r}]"
+        if not same:
+            return response, f"[redirect to {target} not followed: different origin]"
+        if hop >= HTTP_MAX_REDIRECTS:
+            break
+        if response.status_code == 303 or (response.status_code in (301, 302) and current["method"] == "POST"):
+            if current["method"] != "HEAD":
+                current["method"] = "GET"
+            current.pop("json", None)
+        # The Location already carries its own query string.
+        current.update(url=target, params={})
+    return response, f"[redirect not followed: more than {HTTP_MAX_REDIRECTS} redirects]"
 `;
 }

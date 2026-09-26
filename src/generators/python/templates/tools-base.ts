@@ -41,11 +41,15 @@ def truncate_tail(text: str, limit: int) -> str:
 
 
 def redact(text: str) -> str:
-    """Replace the values of REDACT_ENV variables with [REDACTED:<NAME>]."""
+    """Replace the values of REDACT_ENV variables with [REDACTED:<NAME>].
+
+    Values shorter than 4 characters are ignored (they would mangle ordinary text).
+    Tools call this before truncating, so a cut never leaves part of a secret behind.
+    """
     secrets = [(name, os.environ.get(name, "")) for name in REDACT_ENV]
     # Longest values first so a secret that contains another is scrubbed whole.
     for name, value in sorted(secrets, key=lambda item: len(item[1]), reverse=True):
-        if value:
+        if len(value) >= 4:
             text = text.replace(value, f"[REDACTED:{name}]")
     return text
 

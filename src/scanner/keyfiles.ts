@@ -1,4 +1,5 @@
 import path from "node:path";
+import { maskSecrets } from "../core/mask-secrets.js";
 import type { ApiEndpoint, KeyFile } from "../core/types.js";
 import { isFixturePath, isTestPath, type ScanContext } from "./context.js";
 import type { ManifestResult } from "./manifests.js";
@@ -156,7 +157,9 @@ export async function selectKeyFiles(
     if (budget < 400) break;
     const text = await ctx.read(c.path);
     if (!text || !text.trim()) continue;
-    const ex = excerpt(text, budget);
+    // Excerpts go to the planner LLM and .decree/profile.json: mask hardcoded secrets
+    // (before cutting, so a truncated PEM block or assignment is still recognized).
+    const ex = excerpt(maskSecrets(text), budget);
     total += ex.length;
     out.push({ path: c.path, reason: c.reason, excerpt: ex });
   }

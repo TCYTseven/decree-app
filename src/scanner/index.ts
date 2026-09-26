@@ -25,6 +25,19 @@ const MAX_SOURCE_FILES = 6000;
 const MAX_SOURCE_BYTES = 48 * 1024 * 1024;
 
 /** Deterministically scan a repository. No network access. */
+/** Monorepo tools name the root package generically (Nx: `@org/source`); prefer the scope or directory then. */
+const GENERIC_ROOT_NAMES = /^(source|src|root|workspace|monorepo|repo|app|project|main)$/i;
+
+export function projectName(manifestName: string | undefined, absRoot: string): string {
+  const dir = path.basename(absRoot);
+  if (!manifestName) return dir;
+  const m = /^@([^/]+)\/(.+)$/.exec(manifestName);
+  const bare = m ? m[2]! : manifestName;
+  if (!GENERIC_ROOT_NAMES.test(bare)) return manifestName;
+  if (dir && !GENERIC_ROOT_NAMES.test(dir)) return dir;
+  return m && !GENERIC_ROOT_NAMES.test(m[1]!) ? m[1]! : manifestName;
+}
+
 export async function scanProject(root: string, opts: ScanOptions = {}): Promise<ProjectProfile> {
   const started = Date.now();
   const absRoot = path.resolve(root);
@@ -84,7 +97,7 @@ export async function scanProject(root: string, opts: ScanOptions = {}): Promise
   const cli = detectCli(ctx, manifests, manifests.dependencies, sources);
   const git = await readGitInfo(absRoot);
 
-  const name = manifests.name ?? path.basename(absRoot);
+  const name = projectName(manifests.name, absRoot);
   const tree = renderTree(path.basename(absRoot) || name, walk);
 
   progress("Selecting key files");

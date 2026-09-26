@@ -58,7 +58,7 @@ describe("planHeuristic", () => {
       apis: [{ method: "PUT", path: "/tags", params: [], requestBody: { type: "array", items: { type: "string" } }, source: "openapi.yaml" }],
     });
     const t = planHeuristic(profile, { goal: GOAL, targets: ["typescript"] }).tools.find((x) => x.kind === "http")!;
-    expect(t.name).toBe("put_tags");
+    expect(t.name).toBe("update_tags");
     expect(t.http!.bodyParam).toBe("body");
     expect(t.inputSchema.properties!.body).toMatchObject({ type: "array" });
   });
@@ -210,5 +210,85 @@ describe("renderProfileDigest", () => {
     expect(d.length).toBeLessThanOrEqual(60000);
     expect(d).toContain("GET /v1/users");
     expect(d).toContain("## Key files");
+  });
+});
+
+describe("heuristic naming and goal gating (QA regressions)", () => {
+  it("derives REST-style names for routes without an operationId", async () => {
+    const { restToolName } = await import("../src/planner/heuristic.js");
+    const cases: [string, string, string][] = [
+      ["GET", "/api/notes", "list_notes"],
+      ["GET", "/api/notes/{id}", "get_note"],
+      ["POST", "/api/notes", "create_note"],
+      ["PATCH", "/api/notes/[id]", "update_note"],
+      ["DELETE", "/api/notes/:id", "delete_note"],
+      ["GET", "/orders/{id}/events", "list_order_events"],
+      ["POST", "/orders/{id}/cancel", "cancel_order"],
+      ["POST", "/articles/{slug}/comments", "create_article_comment"],
+      ["DELETE", "/articles/{slug}/favorite", "unfavorite_article"],
+      ["POST", "/users/login", "login"],
+      ["POST", "/api/v1/admin/purge", "purge"],
+      ["GET", "/api/search", "search"],
+      ["GET", "/api/session", "get_session"],
+      ["GET", "/health", "get_health"],
+      ["PUT", "/tags", "update_tags"],
+    ];
+    for (const [m, p, want] of cases) expect(restToolName(m, p), `${m} ${p}`).toBe(want);
+  });
+
+  it("does not treat 'look up' or 'online' as a research goal", () => {
+    expect(analyzeGoal("Help support engineers look up customer orders").research).toBe(false);
+    expect(analyzeGoal("Answer questions about our online store").research).toBe(false);
+    expect(analyzeGoal("Research the latest library docs").research).toBe(true);
+  });
+
+  it("leaves deploy/migrate scripts out of support goals but keeps them as LLM candidates", async () => {
+    const { planHeuristicDetailed } = await import("../src/planner/heuristic.js");
+    const profile = sampleProfile({
+      scripts: [
+        { name: "test", command: "vitest run", source: "package.json" },
+        { name: "deploy", command: "fly deploy", source: "package.json" },
+        { name: "db:push", command: "drizzle-kit push", source: "package.json" },
+      ],
+    });
+    const support = planHeuristicDetailed(profile, { goal: "Answer customer support questions about orders", targets: ["typescript"] });
+    expect(support.intent.ops).toBe(false);
+    expect(support.spec.tools.some((t) => t.name === "run_deploy" || t.name === "run_db_push")).toBe(false);
+    expect(support.candidateTools.map((t) => t.name)).toEqual(expect.arrayContaining(["run_deploy", "run_db_push"]));
+    const ops = planHeuristicDetailed(profile, { goal: "Help on-call engineers deploy and run migrations", targets: ["typescript"] });
+    expect(ops.spec.tools.find((t) => t.name === "run_db_push")).toMatchObject({ destructive: true, requiresApproval: true });
+    expect(ops.spec.tools.find((t) => t.name === "run_db_push")!.description).toMatch(/Push the schema/);
+    // Test/lint scripts run project code: not readOnly (the runtime runs readOnly tools in parallel, unapproved).
+    expect(ops.spec.tools.find((t) => t.name === "run_tests")).toMatchObject({ readOnly: false, destructive: false, requiresApproval: false });
+  });
+
+  it("classifies db:push as a migration and a Makefile `run` target as a server", () => {
+    expect(classifyScript({ name: "db:push", command: "drizzle-kit push" })).toBe("migrate");
+    expect(classifyScript({ name: "run", command: "./bin/app" })).toBe("server");
+  });
+
+  it("does not offer a filter param to Make targets", () => {
+    const spec = planHeuristic(sampleProfile({ scripts: [{ name: "test", command: "go test ./...", source: "Makefile" }] }), { goal: GOAL, targets: ["typescript"] });
+    const t = spec.tools.find((x) => x.name === "run_tests")!;
+    expect(t.shell!.command).toBe("make test");
+    expect(t.inputSchema.properties).toEqual({});
+  });
+
+  it("skips webhook receivers", async () => {
+    const { isWebhookReceiver } = await import("../src/planner/heuristic.js");
+    const apis = [
+      { method: "POST" as const, path: "/api/webhooks/{provider}" },
+      { method: "POST" as const, path: "/hooks" },
+      { method: "GET" as const, path: "/hooks" },
+    ];
+    expect(isWebhookReceiver(apis[0]!, apis)).toBe(true);
+    expect(isWebhookReceiver(apis[1]!, apis)).toBe(false); // a managed collection (has a GET), not a receiver
+  });
+
+  it("title-cases acronyms", async () => {
+    const { titleCase, article } = await import("../src/planner/util.js");
+    expect(titleCase("inventory-api-agent")).toBe("Inventory API Agent");
+    expect(article("order")).toBe("an");
+    expect(article("user")).toBe("a");
   });
 });

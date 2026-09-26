@@ -228,3 +228,14 @@ describe("generateTypescript", () => {
     }
   });
 });
+
+describe("missing API key UX (QA regression)", () => {
+  it("evals stop before running any case, and errors don't dump SDK internals", () => {
+    const files = byPath(generateTypescript(sampleSpec(), { outDir: "agent", decreeVersion: "x" }));
+    const evals = files["src/evals.ts"]!;
+    expect(evals).toMatch(/if \(!process\.env\.ANTHROPIC_API_KEY && !process\.env\.ANTHROPIC_AUTH_TOKEN\)/);
+    expect(evals.indexOf("ANTHROPIC_API_KEY is not set")).toBeLessThan(evals.indexOf("for (const c of cases)"));
+    expect(files["src/client.ts"]).toContain("ANTHROPIC_API_KEY is not set.");
+    expect(Object.values(files).join("\n")).toMatch(/IGNORED_DIRS = new Set\(\[[^\]]*"\.venv"/);
+  });
+});

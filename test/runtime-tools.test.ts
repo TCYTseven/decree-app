@@ -33,6 +33,8 @@ beforeEach(() => {
   writeFileSync(path.join(root, "README.md"), "# Proj\nfoo bar\n");
   mkdirSync(path.join(root, "node_modules/pkg"), { recursive: true });
   writeFileSync(path.join(root, "node_modules/pkg/index.ts"), "foo");
+  mkdirSync(path.join(root, ".venv/lib/site-packages"), { recursive: true });
+  writeFileSync(path.join(root, ".venv/lib/site-packages/dep.py"), "foo = 1\n");
   writeFileSync(path.join(root, "bin.dat"), Buffer.from([0x66, 0x6f, 0x6f, 0x00, 0x01]));
 });
 
@@ -109,6 +111,7 @@ describe("fs tools", () => {
     expect(lines).toContain("README.md:2: foo bar");
     expect(r.output).not.toContain("bin.dat");
     expect(r.output).not.toContain("node_modules");
+    expect(r.output).not.toContain(".venv"); // virtualenvs would flood results on every Python project
 
     const scoped = await executeTool(tool("search_code"), { query: "foo", glob: "src/lib/**" }, ctx());
     expect(scoped.output).toBe("src/lib/util.ts:1: export function bar() { return 'foo'; }");
@@ -279,6 +282,9 @@ describe("http tool", () => {
     const down = await executeTool(tool("get_order"), { id: "1" }, ctx({ env: { ACME_BASE_URL: "http://127.0.0.1:1" } }));
     expect(down.isError).toBe(true);
     expect(down.output).toMatch(/^HTTP request failed/);
+    // Says what was called and why it failed (undici hides the code in err.cause).
+    expect(down.output).toContain("GET http://127.0.0.1:1/");
+    expect(down.output).toMatch(/fetch failed \(.+\)/); // e.g. "(bad port)" or "(ECONNREFUSED)"
 
     const noBase: ToolSpec = { ...tool("get_order"), http: { ...tool("get_order").http!, defaultBaseUrl: undefined } };
     const nb = await executeTool(noBase, { id: "1" }, ctx({ env: {} }));

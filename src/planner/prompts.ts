@@ -61,7 +61,7 @@ const toolSchema: JSONSchema = {
       additionalProperties: false,
       description: "Only for kind=shell.",
       properties: {
-        command: str("Fixed command template; {{param}} placeholders are shell-escaped input values"),
+        command: str("Fixed command template; {{param}} placeholders are shell-escaped input values and must be bare words, never inside quotes"),
         cwd: str("Relative to the project root"),
         timeoutMs: { type: "integer" },
       },
@@ -267,7 +267,7 @@ Write 6-12 eval cases a weak harness could fail: correct tool choice for represe
 - Tool names are snake_case and unique; subagent names and eval ids are kebab-case.
 - inputSchema is a JSON Schema object written as a JSON string. Use "{}" for web_search, web_fetch and memory, which are declared by type.
 - http: every {name} in the path must be an input property. queryParams and headerParams list which inputs go where; remaining inputs are sent as the JSON body, or set bodyParam to send one input as the whole body. Reuse baseUrlEnv, defaultBaseUrl and auth from the candidates.
-- shell: {{name}} placeholders refer to input properties and are shell-escaped. cwd is relative to the project root.
+- shell: {{name}} placeholders refer to input properties and are shell-escaped. Write each placeholder as a bare word, never inside quotes or backticks/$(...): \`grep -rn {{pattern}} src\`, not \`grep -rn "{{pattern}}" src\` (quoting it again breaks the escaping and the spec is rejected). Values starting with "-" are refused unless the property sets "x-allow-flags": true. cwd is relative to the project root.
 - fs: {"root": "."} unless the agent should be confined to a subdirectory.
 - source records provenance: "openapi:GET /orders", "package.json#scripts.test", "builtin".
 </field_conventions>`;

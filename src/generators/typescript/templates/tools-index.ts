@@ -95,13 +95,24 @@ function runExpression(spec: ToolSpec): string {
       return `(input) =>\n    ${runner.fn}(input, ${tsLiteral(spec.http, 2)})`;
     case "shell":
       if (!spec.shell) return missingBinding("shell");
-      return `(input) =>\n    ${runner.fn}(input, ${tsLiteral(spec.shell, 2)})`;
+      return `(input) =>\n    ${runner.fn}(input, ${tsLiteral(shellBinding(spec), 2)})`;
     default: {
       const fs = spec.fs ?? { root: "." };
       const binding = isFsKind(spec.kind) && spec.kind !== "read_file" ? { root: fs.root } : fs;
       return `(input) => ${runner.fn}(input, ${tsLiteral(binding, 2)})`;
     }
   }
+}
+
+/** The shell binding plus the params whose schema sets `"x-allow-flags": true`. */
+export function flagParams(spec: ToolSpec): string[] {
+  const props = spec.inputSchema?.properties ?? {};
+  return Object.keys(props).filter((k) => (props[k] as Record<string, unknown> | undefined)?.["x-allow-flags"] === true);
+}
+
+function shellBinding(spec: ToolSpec): Record<string, unknown> {
+  const allowFlags = flagParams(spec);
+  return allowFlags.length ? { ...spec.shell, allowFlags } : { ...spec.shell };
 }
 
 function missingBinding(kind: string): string {

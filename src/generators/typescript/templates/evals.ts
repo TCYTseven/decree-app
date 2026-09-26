@@ -116,6 +116,11 @@ async function main(): Promise<void> {
     console.log(only.length > 0 ? \`No eval cases match: \${only.join(", ")}\` : "No eval cases defined.");
     return;
   }
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
+    console.error("ANTHROPIC_API_KEY is not set. Put it in .env next to package.json or export it in your shell.");
+    process.exitCode = 1;
+    return;
+  }
 
   const rows: string[][] = [];
   let failed = 0;
