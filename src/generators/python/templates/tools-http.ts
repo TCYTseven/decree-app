@@ -42,6 +42,9 @@ def build_request(binding: Mapping[str, Any], args: Mapping[str, Any]) -> dict[s
         name = match.group(1)
         if args.get(name) is None:
             raise ValueError(f"Missing required path parameter: {name}")
+        if to_text(args[name]) in (".", ".."):
+            # httpx would resolve these as dot segments (/users/.. -> /).
+            raise ValueError(f"Path parameter {name} may not be '.' or '..'")
         consumed.add(name)
         return encode_component(args[name])
 

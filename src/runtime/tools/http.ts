@@ -22,6 +22,7 @@ export function prepareHttpRequest(tool: ToolSpec, input: ToolInput, ctx: ToolCo
 
   const consumed = new Set<string>();
   let missing: string | undefined;
+  let dotSegment: string | undefined;
   const pathPart = http.path.replace(/\{([^}]+)\}/g, (_m, name: string) => {
     consumed.add(name);
     const v = input[name];
@@ -29,9 +30,14 @@ export function prepareHttpRequest(tool: ToolSpec, input: ToolInput, ctx: ToolCo
       missing ??= name;
       return "";
     }
-    return encodeURIComponent(stringifyValue(v));
+    const text = stringifyValue(v);
+    // "." and ".." survive encodeURIComponent and the URL parser would resolve them as
+    // dot segments, letting a model-supplied id walk up the API path (/users/.. -> /).
+    if (text === "." || text === "..") dotSegment ??= name;
+    return encodeURIComponent(text);
   });
   if (missing) throw new Error(`missing path parameter "${missing}"`);
+  if (dotSegment) throw new Error(`path parameter "${dotSegment}" may not be "." or ".."`);
 
   const url = new URL(base.replace(/\/+$/, "") + pathPart);
   for (const key of http.queryParams ?? []) {

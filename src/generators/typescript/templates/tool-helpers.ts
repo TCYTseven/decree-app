@@ -34,6 +34,7 @@ export async function callHttp(input: Record<string, unknown>, binding: HttpBind
 
   const consumed = new Set<string>();
   let missing: string | undefined;
+  let dotSegment: string | undefined;
   const urlPath = binding.path.replace(/\\{([^}]+)\\}/g, (_, name: string) => {
     consumed.add(name);
     const value = input[name];
@@ -41,9 +42,12 @@ export async function callHttp(input: Record<string, unknown>, binding: HttpBind
       missing ??= name;
       return "";
     }
+    // "." and ".." would be resolved as dot segments by the URL parser (/users/.. -> /).
+    if (toText(value) === "." || toText(value) === "..") dotSegment ??= name;
     return encodeURIComponent(toText(value));
   });
   if (missing) return { output: \`Missing required path parameter "\${missing}".\`, isError: true };
+  if (dotSegment) return { output: \`Path parameter "\${dotSegment}" may not be "." or "..".\`, isError: true };
 
   let url: URL;
   try {
@@ -236,7 +240,7 @@ const DEFAULT_MAX_BYTES = 200_000;
 const MAX_LISTED_FILES = 500;
 const MAX_MATCHES = 200;
 const MAX_SEARCH_FILE_BYTES = 1_000_000;
-const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", ".decree"]);
+const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", ".decree", ".venv", "venv", "__pycache__", ".next", ".nuxt", ".svelte-kit", ".turbo", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache"]);
 
 export async function readFile(input: Record<string, unknown>, binding: FsBinding): Promise<ToolResult> {
   return guarded(async () => {
@@ -372,6 +376,11 @@ async function realpathOfNearest(p: string): Promise<string> {
   try {
     return await fs.realpath(p);
   } catch {
+    // It exists but cannot be resolved (a dangling or looping symlink): following it
+    // on write could land anywhere, so refuse instead of trusting the lexical path.
+    if (await fs.lstat(p).then(() => true, () => false)) {
+      throw new ToolError("Refused: the path goes through a symlink that cannot be resolved.");
+    }
     const parent = path.dirname(p);
     return parent === p ? p : path.join(await realpathOfNearest(parent), path.basename(p));
   }

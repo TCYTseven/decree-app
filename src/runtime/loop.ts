@@ -169,6 +169,11 @@ export function buildRequest(cfg: Pick<LoopConfig, "spec" | "model" | "effort" |
   return { body, beta: betas.length > 0 };
 }
 
+/** Client/server tool calls and server tool results: these must stay paired in history. */
+function isToolBlock(b: ContentBlockLike): boolean {
+  return b.type === "tool_use" || b.type === "server_tool_use" || b.type.endsWith("_tool_result");
+}
+
 function textOf(content: ContentBlockLike[]): string {
   return content
     .filter((b) => b.type === "text" && typeof b.text === "string")
@@ -203,7 +208,8 @@ export async function agentLoop(cfg: LoopConfig): Promise<LoopResult> {
   const { spec, messages, budget } = cfg;
   const byName = new Map(cfg.tools.map((t) => [t.name, t] as const));
   const subByTool = new Map(cfg.subagents.map((s) => [delegateToolName(s.name), s] as const));
-  const redactNames = spec.guardrails.redactEnv ?? [];
+  // The agent's own API key is always scrubbed: shell tools inherit it via process.env.
+  const redactNames = [...new Set([...(spec.guardrails.redactEnv ?? []), "ANTHROPIC_API_KEY"])];
   const env = cfg.ctx.env ?? process.env;
 
   let turns = 0;
@@ -276,7 +282,9 @@ export async function agentLoop(cfg: LoopConfig): Promise<LoopResult> {
 
     if (stopReason === "max_tokens" || stopReason === "refusal") {
       // Never run tool calls from a truncated/refused turn; keep the rest of the content.
-      const kept = content.filter((b) => b.type !== "tool_use" && b.type !== "server_tool_use");
+      // Server tool results go too: without their server_tool_use they would be orphans
+      // and the next request (chat keeps this history) would be rejected.
+      const kept = content.filter((b) => !isToolBlock(b));
       if (kept.some((b) => b.type === "text" || b.type === "compaction")) messages.push({ role: "assistant", content: kept });
       failed = stopReason === "refusal" || toolUses.length > 0;
       if (stopReason === "refusal") {
@@ -293,7 +301,18 @@ export async function agentLoop(cfg: LoopConfig): Promise<LoopResult> {
       break;
     }
 
-    messages.push({ role: "assistant", content });
+    if (stopReason !== "tool_use" && toolUses.length > 0) {
+      // Any other stop (e.g. model_context_window_exceeded) can leave tool calls we will
+      // never answer; an unanswered tool_use would make the kept history invalid.
+      const kept = content.filter((b) => !isToolBlock(b));
+      if (kept.length) messages.push({ role: "assistant", content: kept });
+      failed = true;
+      stopError(cfg, `Stopped (${stopReason ?? "unknown stop reason"}); ${toolUses.length} tool call(s) were not run.`);
+      break;
+    }
+
+    // An empty assistant message is rejected by the API once it is no longer the last turn.
+    if (content.length > 0) messages.push({ role: "assistant", content });
 
     if (stopReason !== "tool_use" || toolUses.length === 0) break; // end_turn / stop_sequence / other terminal
 

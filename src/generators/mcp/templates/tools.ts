@@ -164,6 +164,7 @@ async function runHttp(tool: ToolBinding, input: Input): Promise<ToolResult> {
 
   const consumed = new Set<string>();
   let missing: string | null = null;
+  let dotSegment: string | null = null;
   const urlPath = h.path.replace(/\{([^}]+)\}/g, (_m, key: string) => {
     consumed.add(key);
     const v = input[key];
@@ -171,9 +172,12 @@ async function runHttp(tool: ToolBinding, input: Input): Promise<ToolResult> {
       missing = key;
       return "";
     }
+    // "." and ".." would be resolved as dot segments by the URL parser (/users/.. -> /).
+    if (asText(v) === "." || asText(v) === "..") dotSegment = key;
     return encodeURIComponent(asText(v));
   });
   if (missing) return result("Missing required path parameter: " + missing, true);
+  if (dotSegment) return result("Path parameter " + dotSegment + ' may not be "." or "..".', true);
 
   const url = new URL(base.replace(/\/+$/, "") + urlPath);
   for (const key of h.queryParams ?? []) {
@@ -333,6 +337,16 @@ function realish(p: string): string {
     try {
       return path.join(fs.realpathSync(cur), ...rest.reverse());
     } catch {
+      // It exists but cannot be resolved (a dangling or looping symlink): a write through
+      // it could land anywhere, so refuse instead of trusting the lexical path.
+      let exists = false;
+      try {
+        fs.lstatSync(cur);
+        exists = true;
+      } catch {
+        exists = false;
+      }
+      if (exists) throw new Error("Path goes through a symlink that cannot be resolved: " + p);
       const parent = path.dirname(cur);
       if (parent === cur) return p;
       rest.push(path.basename(cur));
@@ -375,7 +389,11 @@ function isAllowed(abs: string): boolean {
 
 /** For entries found by walking: no symlink may lead outside the root or the allowed paths. */
 function safeChild(root: string, abs: string): boolean {
-  return within(realish(root), realish(abs)) && isAllowed(abs);
+  try {
+    return within(realish(root), realish(abs)) && isAllowed(abs);
+  } catch {
+    return false;
+  }
 }
 
 function display(tool: ToolBinding, abs: string): string {
@@ -415,7 +433,7 @@ function writeFileTool(tool: ToolBinding, input: Input): ToolResult {
 // list_files / search
 // ---------------------------------------------------------------------------
 
-const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", ".decree"]);
+const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", ".decree", ".venv", "venv", "__pycache__", ".next", ".nuxt", ".svelte-kit", ".turbo", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache"]);
 const MAX_WALK = 100_000;
 
 /** Convert a glob (*, **, ?, [..], {a,b}) to an anchored RegExp over POSIX relative paths. */

@@ -199,6 +199,16 @@ export async function writeFiles(outDir: string, files: GeneratedFile[], opts: W
       next[rel] = known; // remember it so a later --clean can remove it
       continue;
     }
+    // Never delete through a directory symlink that leads outside outDir (the manifest may be stale or hand-edited).
+    const linkedOut = await assertRealInside(rootReal, abs, root).then(
+      () => false,
+      () => true,
+    );
+    if (linkedOut) {
+      report.skipped.push(rel);
+      next[rel] = known;
+      continue;
+    }
     const current = await readIfExists(abs).catch(() => undefined);
     if (current === undefined) continue;
     if (sha256(current) !== known && !opts.force) {
