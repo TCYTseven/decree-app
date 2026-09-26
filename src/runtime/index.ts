@@ -14,7 +14,9 @@ export type { MessagesClientLike, StreamLike, ModelResponse, RuntimeErrorEvent }
 export function createRuntimeClient(apiKey?: string): Anthropic {
   const key = apiKey ?? resolveApiKey();
   if (!key) throw new MissingApiKeyError();
-  return new Anthropic({ apiKey: key });
+  // authToken: null so a stray ANTHROPIC_AUTH_TOKEN in the environment doesn't add a second
+  // (conflicting) Authorization header next to x-api-key; matches createLLM.
+  return new Anthropic({ apiKey: key, authToken: null });
 }
 
 /** Run the harness described by `spec` live against Claude, executing tools locally. */

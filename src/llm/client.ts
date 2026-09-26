@@ -228,7 +228,8 @@ export function parseJsonResponse<T>(text: string, schema: JSONSchema): T {
 function isSchemaRejection(err: unknown): boolean {
   const raw = err instanceof LLMError ? err.cause : err;
   if (!(raw instanceof BadRequestError)) return false;
-  return /schema|output_config|format|structured/i.test(raw.message);
+  // e.g. "Schema is too complex for compilation", "Too many optional parameters", unsupported output_config.format
+  return /schema|output_config|format|structured|optional param|union type|grammar|compil/i.test(raw.message);
 }
 
 function apiMessage(err: APIError): string {
