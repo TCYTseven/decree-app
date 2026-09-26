@@ -1,24 +1,43 @@
 import { Command, CommanderError } from "commander";
 import { DECREE_VERSION, DEFAULT_MODEL, DEFAULT_OUT_DIR } from "../version.js";
-import { handleError } from "../ui/errors.js";
+import { formatCommanderError, handleError } from "../ui/errors.js";
 import { setQuiet, setVerbose } from "../ui/logger.js";
-import { c, detectColor, setColorEnabled } from "../ui/theme.js";
+import { c, detectColor, setColorEnabled, termWidth, wrapText } from "../ui/theme.js";
+import { selfCommand } from "./context.js";
 
-const EXAMPLES = `
-Examples:
-  $ npx decree-harness                          scan, plan and generate interactively
-  $ npx decree-harness init --yes --offline     non-interactive, no API key needed
-  $ npx decree-harness init --goal "Triage failing CI runs" --targets typescript,mcp
-  $ npx decree-harness chat                     talk to the generated agent
-  $ npx decree-harness run "How many orders are pending?" --json
-  $ npx decree-harness refine "make every tool read-only"
-  $ npx decree-harness eval --filter orders
+const EXAMPLES: [string, string][] = [
+  ["", "interactive setup"],
+  ["init --yes --offline", "no prompts, no API key needed"],
+  ['init -g "Fix flaky tests" -t ts,mcp', "set the goal and targets up front"],
+  ["chat", "talk to the generated agent"],
+  ['run "Which orders are pending?" --json', "one-shot run, JSON output"],
+  ['refine "make every tool read-only"', "edit the harness in plain English"],
+  ["eval --filter orders", "run a subset of the evals"],
+];
 
-Docs: decree.json is the source of truth. Edit it, then run \`decree-harness generate\`.`;
+/** Examples block, laid out for the terminal width (description beside or above each command). */
+function examplesHelp(): string {
+  const self = selfCommand();
+  const width = termWidth();
+  const cmds = EXAMPLES.map(([args, d]) => [`$ ${self}${args ? ` ${args}` : ""}`, d] as const);
+  const w = Math.max(...cmds.map(([x]) => x.length)) + 2;
+  const side = 2 + w + Math.max(...cmds.map(([, d]) => d.length)) <= width;
+  const lines = cmds.map(([x, d]) => (side ? `  ${x.padEnd(w)}${c.dim(d)}` : `  ${c.dim(`# ${d}`)}\n${wrapText(`  ${x}`, width, "      ")}`));
+  const tail = wrapText(
+    `decree.json is the source of truth: edit it, then run \`${self} generate\`. Installed globally, the shorter \`decree\` command works too.`,
+    width,
+  );
+  return `\nExamples:\n${lines.join(side ? "\n" : "\n\n")}\n\n${tail}`;
+}
 
 function styleHelp(cmd: Command, color: boolean): void {
+  // Wrap option descriptions even on narrow (60-column) terminals; commander's default gives up below 40.
+  cmd.configureHelp({ minWidthToWrap: 24, helpWidth: termWidth() });
+  cmd.configureOutput({ outputError: (str, write) => write(formatCommanderError(str)) });
   if (!color) return;
   cmd.configureHelp({
+    minWidthToWrap: 24,
+    helpWidth: termWidth(),
     styleTitle: (s) => c.bold(s),
     styleCommandText: (s) => c.cyan(s),
     styleSubcommandText: (s) => c.cyan(s),
@@ -34,14 +53,13 @@ export function buildProgram(): Command {
   const program = new Command();
   program
     .name("decree-harness")
-    .description("Scan a codebase and generate an optimal AI agent harness for it.")
+    .description("Scan a codebase and generate an AI agent harness for it: prompt, tools, subagents, guardrails and evals.")
     .version(DECREE_VERSION, "-v, --version", "print the version")
     .option("-C, --cwd <dir>", "run as if decree was started in <dir>")
     .option("--verbose", "print debug output and stack traces")
     .option("--no-color", "disable colored output")
     .helpOption("-h, --help", "show help")
-    .showHelpAfterError(c.dim("(run with --help for usage)"))
-    .addHelpText("after", EXAMPLES)
+    .addHelpText("after", examplesHelp)
     .exitOverride()
     .hook("preAction", (_root, action) => {
       const g = action.optsWithGlobals<{ verbose?: boolean; color?: boolean }>();
@@ -90,6 +108,7 @@ export function buildProgram(): Command {
     .option("-f, --force", "overwrite files you edited")
     .option("--dry-run", "show what would change without writing")
     .option("--clean", "remove previously generated files that are no longer produced")
+    .option("--json", "print what was written as JSON")
     .action((opts, cmd) => import("./generate.js").then((m) => m.generateCommand(opts, cmd)));
 
   program
@@ -151,8 +170,19 @@ export function buildProgram(): Command {
     .description("print the JSON schema for decree.json")
     .action(() => import("./schema.js").then((m) => m.schemaCommand()));
 
+  program
+    .command("preview")
+    .description("open a local dashboard to inspect, edit and try the harness")
+    .option("-p, --port <port>", "port to listen on (a free one is picked if taken)", "4321")
+    .option("--host <host>", "interface to bind (keep 127.0.0.1 unless you know why)", "127.0.0.1")
+    .option("--no-open", "don't open the browser")
+    .option("--api-key <key>", "Anthropic API key for the playground and evals")
+    .action((opts, cmd) => import("./preview.js").then((m) => m.previewCommand(opts, cmd)));
+
+  program.showHelpAfterError(c.dim(`  hint: Run \`${selfCommand()} --help\` for usage.`));
   for (const sub of program.commands) {
     sub.exitOverride();
+    sub.showHelpAfterError(c.dim(`  hint: Run \`${selfCommand()} ${sub.name()} --help\` for usage.`));
     styleHelp(sub, color);
   }
   return program;
