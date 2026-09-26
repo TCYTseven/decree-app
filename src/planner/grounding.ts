@@ -309,7 +309,7 @@ export function groundDraft(raw: Record<string, unknown>, ctx: GroundingContext)
     ...env.filter((e) => e.secret).map((e) => e.name),
     ...(ctx.profile?.envVars.filter((v) => v.secret).map((v) => v.name) ?? []),
   ]);
-  const guardrails = {
+  const guardrails: Record<string, unknown> = {
     ...g,
     blockedCommands: blocked,
     redactEnv: secrets,

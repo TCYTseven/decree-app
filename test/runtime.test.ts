@@ -190,7 +190,7 @@ describe("agent loop", () => {
     const { events, onEvent } = collect();
     const res = await runAgentWithClient(noCompaction(), { projectRoot: root, prompt: "cancel 7", approve, onEvent }, client);
     expect(approve).toHaveBeenCalledTimes(1);
-    expect(approve.mock.calls[0][0]).toMatchObject({ name: "cancel_order", input: { id: "7", reason: "dup" }, tool: { name: "cancel_order" } });
+    expect((approve.mock.calls as unknown as unknown[][])[0][0]).toMatchObject({ name: "cancel_order", input: { id: "7", reason: "dup" }, tool: { name: "cancel_order" } });
     expect(calls[1].body.messages.at(-1).content[0]).toEqual({ type: "tool_result", tool_use_id: "c1", content: DECLINED_MESSAGE, is_error: true });
     expect(events.some((e) => e.type === "approval_denied" && e.name === "cancel_order")).toBe(true);
     expect(res.toolCalls[0]).toMatchObject({ name: "cancel_order", isError: true });
