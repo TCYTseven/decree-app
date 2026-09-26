@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.decree/
+test/.tmp/
+*.log
+.env
+.DS_Store
