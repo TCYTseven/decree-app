@@ -60,6 +60,13 @@ export function normalizePath(raw: string, opts: { keepTrailingSlash?: boolean }
     });
     p = p.replace(/\\\//g, "/").replace(/\\\./g, ".");
   }
+  // hono regex params  :id{[0-9]+}  -> :id  (before brace handling turns the regex into a bogus param)
+  p = p.replace(/:(\w+)\{((?:[^{}]|\{[^{}]*\})*)\}/g, (_, n: string, re: string) => {
+    if (/^(\\d|\[0-9\])\+?$/.test(re)) types[n] = { type: "integer" };
+    return `:${n}`;
+  });
+  // axum 0.8 / matchit catch-all  {*rest}
+  p = p.replace(/\{\*(\w+)\}/g, "{$1}");
   // flask / django converters
   p = p.replace(/<(?:(\w+):)?(\w+)>/g, (_, conv: string | undefined, n: string) => {
     if (conv && TYPE_HINTS[conv] && conv !== "str" && conv !== "string") types[n] = TYPE_HINTS[conv]!;
@@ -99,11 +106,36 @@ export function pathParamNames(p: string): string[] {
   return [...p.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!);
 }
 
+/**
+ * Bracket scanning is linear per call, so a file with thousands of unclosed openers (minified or generated code,
+ * or a truncated file) would make detectors quadratic. Each text gets a budget of scanned characters; once it is
+ * spent, matching fails (-1) and detectors skip the construct instead of hanging the scan.
+ */
+const SCAN_BUDGET = 40_000_000;
+let budgetText: string | undefined;
+let budgetLeft = SCAN_BUDGET;
+
+/** Charge `n` scanned characters to `text`'s budget; false once the budget is exhausted. */
+export function chargeScan(text: string, n: number): boolean {
+  if (text !== budgetText) {
+    budgetText = text;
+    budgetLeft = SCAN_BUDGET;
+  }
+  budgetLeft -= n;
+  return budgetLeft >= 0;
+}
+
 /** Index of the bracket that closes the one at `openIdx` (supports () [] {}), skipping strings. */
 export function matchBracket(text: string, openIdx: number): number {
   const open = text[openIdx];
   const close = open === "(" ? ")" : open === "[" ? "]" : open === "{" ? "}" : "";
   if (!close) return -1;
+  const r = matchBracketRaw(text, openIdx, close);
+  return chargeScan(text, (r < 0 ? text.length : r) - openIdx + 1) ? r : -1;
+}
+
+function matchBracketRaw(text: string, openIdx: number, close: string): number {
+  if (budgetText === text && budgetLeft < 0) return -1;
   let depth = 0;
   let quote = "";
   for (let i = openIdx; i < text.length; i++) {

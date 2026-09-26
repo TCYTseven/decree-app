@@ -231,6 +231,13 @@ function pep508List(v: TomlValue | undefined, dev: boolean): DependencyInfo[] {
   return out;
 }
 
+/** Last meaningful segment of a Go module path: `github.com/go-chi/chi/v5` -> `chi`. */
+export function goModuleName(mod: string): string {
+  const segs = mod.replace(/\/+$/, "").split("/").filter(Boolean);
+  while (segs.length > 1 && /^v\d+$/.test(segs[segs.length - 1]!)) segs.pop();
+  return segs[segs.length - 1] ?? mod;
+}
+
 const DEV_GROUP = /^(dev|devel|develop|development|test|tests|testing|lint|linting|docs|doc|typing|types|ci)$/i;
 
 function unscoped(name: string): string {
@@ -433,7 +440,7 @@ export async function parseManifests(ctx: ScanContext): Promise<ManifestResult> 
     if (!text) continue;
     note(f.path);
     const mod = /^module\s+(\S+)/m.exec(text)?.[1];
-    if (f.path === "go.mod" && mod) setName(mod.split("/").pop(), "go.mod");
+    if (f.path === "go.mod" && mod) setName(goModuleName(mod), "go.mod");
     const addGo = (line: string) => {
       const m = /^\s*([\w.\-/~]+\.[\w.\-/~]+)\s+(v[\w.\-+]+)(\s*\/\/\s*indirect)?/.exec(line);
       if (m && !m[3]) addDeps([{ name: m[1]!, version: m[2]!, ecosystem: "go" }]);

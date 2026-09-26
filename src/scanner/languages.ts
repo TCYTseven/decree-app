@@ -1,4 +1,5 @@
 import type { LanguageStat } from "../core/types.js";
+import { outsideJvmPackage } from "./context.js";
 import type { FileEntry } from "./walk.js";
 
 const EXT_LANG: Record<string, string> = {
@@ -47,7 +48,13 @@ const EXT_LANG: Record<string, string> = {
 /** Languages that never become the primary language when a "real" one exists. */
 const SECONDARY = new Set(["HTML", "CSS", "SCSS", "Less", "SQL", "Shell", "PowerShell", "HCL", "Protocol Buffers", "GraphQL"]);
 
-const FIXTURE_DIR_RE = /(^|\/)(fixtures?|testdata|examples?|samples?)\//i;
+const FIXTURE_DIR_RE = /(^|\/)(fixtures?|testdata|_?examples?|samples?|code[-_]?samples)\//i;
+
+/** Big JS/CSS files under public/static asset dirs are build output (a compiled bundle), not the project's code. */
+const ASSET_DIR_RE = /(^|\/)(public|static|assets|wwwroot|web\/static|dist-assets)\//i;
+function isBuiltAsset(f: FileEntry): boolean {
+  return (f.ext === ".js" || f.ext === ".css" || f.ext === ".mjs") && f.size > 50 * 1024 && ASSET_DIR_RE.test(f.path);
+}
 
 export function languageOf(f: FileEntry): string | undefined {
   if (/\.min\.[cm]?js$/.test(f.name)) return undefined;
@@ -57,8 +64,9 @@ export function languageOf(f: FileEntry): string | undefined {
 export function detectLanguages(allFiles: FileEntry[]): { languages: LanguageStat[]; primaryLanguage?: string } {
   const map = new Map<string, LanguageStat>();
   // Fixtures and examples describe other projects; count them only if nothing else exists.
-  const own = allFiles.filter((f) => !FIXTURE_DIR_RE.test(f.path) && languageOf(f));
-  const files = own.length ? own : allFiles;
+  const own = allFiles.filter((f) => !FIXTURE_DIR_RE.test(outsideJvmPackage(f.path)) && !isBuiltAsset(f) && languageOf(f));
+  // Documentation code samples (one snippet per language next to an API spec) are never the project's language.
+  const files = own.length ? own : allFiles.filter((f) => !/(^|\/)code[-_]?samples\//i.test(f.path));
   for (const f of files) {
     const lang = languageOf(f);
     if (!lang) continue;

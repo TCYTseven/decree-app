@@ -1,3 +1,4 @@
+import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { ApiEndpoint, ApiParam, JSONSchema } from "../core/types.js";
 import { isFixturePath, type ScanContext } from "./context.js";
@@ -42,51 +43,82 @@ export async function findOpenApiSpecs(ctx: ScanContext): Promise<string[]> {
   return out;
 }
 
-class RefResolver {
-  constructor(private doc: Json) {}
+/** Parsed documents of a multi-file spec, keyed by POSIX path relative to the project root. */
+export type DocLoader = (rel: string) => unknown;
 
-  lookup(ref: string): unknown {
-    if (!ref.startsWith("#/")) return undefined;
-    let cur: unknown = this.doc;
-    for (const raw of ref.slice(2).split("/")) {
+interface Located<T = unknown> {
+  value: T;
+  /** File the value came from: relative $refs inside it resolve against this file. */
+  base: string;
+}
+
+/** Split a $ref into its target file (relative to the project root; "" = same doc) and JSON pointer. */
+export function refTarget(ref: string, base: string): { file: string; pointer: string } | undefined {
+  const hash = ref.indexOf("#");
+  const filePart = hash < 0 ? ref : ref.slice(0, hash);
+  const pointer = hash < 0 ? "" : ref.slice(hash + 1);
+  if (!filePart) return { file: base, pointer };
+  if (/^[a-z][a-z0-9+.-]*:/i.test(filePart) || filePart.startsWith("/")) return undefined; // remote / absolute: never fetched
+  const dir = base.includes("/") ? base.slice(0, base.lastIndexOf("/")) : "";
+  const file = path.posix.normalize(path.posix.join(dir || ".", decodeURIComponent(filePart)));
+  if (file.startsWith("..")) return undefined;
+  return { file, pointer };
+}
+
+class RefResolver {
+  constructor(
+    private doc: Json,
+    private source: string,
+    private load?: DocLoader,
+  ) {}
+
+  lookup(ref: string, base: string): Located | undefined {
+    const t = refTarget(ref, base);
+    if (!t) return undefined;
+    let cur: unknown = t.file === this.source ? this.doc : this.load?.(t.file);
+    if (cur === undefined) return undefined;
+    for (const raw of t.pointer.replace(/^\//, "").split("/")) {
+      if (!raw) continue;
       const key = decodeURIComponent(raw).replace(/~1/g, "/").replace(/~0/g, "~");
       if (!isObj(cur) && !Array.isArray(cur)) return undefined;
       cur = (cur as Json)[key];
     }
-    return cur;
+    return { value: cur, base: t.file };
   }
 
-  /** Resolve a single top-level $ref chain (for parameters / requestBodies). */
-  shallow<T = Json>(v: unknown): T | undefined {
-    let cur = v;
-    for (let i = 0; i < 10 && isObj(cur) && typeof cur.$ref === "string"; i++) cur = this.lookup(cur.$ref);
-    return isObj(cur) ? (cur as T) : undefined;
+  /** Resolve a single top-level $ref chain (for path items / parameters / requestBodies). */
+  shallow<T = Json>(v: unknown, base: string): Located<T> | undefined {
+    let cur: Located | undefined = { value: v, base };
+    for (let i = 0; i < 10 && cur && isObj(cur.value) && typeof cur.value.$ref === "string"; i++) cur = this.lookup(cur.value.$ref, cur.base);
+    return cur && isObj(cur.value) ? (cur as Located<T>) : undefined;
   }
 
-  /** Deep-resolve local $refs in a schema, breaking cycles and bounding depth. */
-  schema(v: unknown, depth = 0, stack: string[] = []): JSONSchema {
+  /** Deep-resolve $refs (local and cross-file) in a schema, breaking cycles and bounding depth. */
+  schema(v: unknown, base: string, depth = 0, stack: string[] = []): JSONSchema {
     if (!isObj(v)) return {};
     if (depth > 8) return { type: "object", description: "(nested schema truncated)" };
     if (typeof v.$ref === "string") {
       const ref = v.$ref;
-      const name = ref.split("/").pop() ?? ref;
-      if (stack.includes(ref)) return { type: "object", description: `Recursive reference to ${name}` };
-      const target = this.lookup(ref);
-      if (!isObj(target)) return { description: `Unresolved reference ${ref}` };
-      const resolved = this.schema(target, depth + 1, [...stack, ref]);
+      const t = refTarget(ref, base);
+      const key = t ? `${t.file}#${t.pointer}` : ref;
+      const name = (t?.pointer || t?.file || ref).split("/").pop()!.replace(/\.(ya?ml|json)$/i, "") || ref;
+      if (stack.includes(key)) return { type: "object", description: `Recursive reference to ${name}` };
+      const target = this.lookup(ref, base);
+      if (!target || !isObj(target.value)) return { description: `Unresolved reference ${ref}` };
+      const resolved = this.schema(target.value, target.base, depth + 1, [...stack, key]);
       const { $ref: _, ...siblings } = v;
-      return { ...resolved, ...(this.schema(siblings, depth, stack) as Json) };
+      return { ...resolved, ...(this.schema(siblings, base, depth, stack) as Json) };
     }
     const out: JSONSchema = {};
     for (const [k, val] of Object.entries(v)) {
       if (k === "properties" && isObj(val)) {
         const props: Record<string, JSONSchema> = {};
-        for (const [pk, pv] of Object.entries(val)) props[pk] = this.schema(pv, depth + 1, stack);
+        for (const [pk, pv] of Object.entries(val)) props[pk] = this.schema(pv, base, depth + 1, stack);
         out.properties = props;
       } else if ((k === "items" || k === "additionalProperties" || k === "not") && isObj(val)) {
-        out[k] = this.schema(val, depth + 1, stack);
+        out[k] = this.schema(val, base, depth + 1, stack);
       } else if ((k === "allOf" || k === "anyOf" || k === "oneOf") && Array.isArray(val)) {
-        out[k] = val.map((x) => this.schema(x, depth + 1, stack));
+        out[k] = val.map((x) => this.schema(x, base, depth + 1, stack));
       } else if (k === "discriminator" || k === "xml" || k === "externalDocs" || k.startsWith("x-")) {
         continue;
       } else {
@@ -138,12 +170,15 @@ function pathPrefixFromServer(doc: Json): string {
   return p && p !== "/" ? (p.startsWith("/") ? p : "/" + p) : "";
 }
 
-function paramFrom(r: RefResolver, raw: unknown): (ApiParam & { _body?: JSONSchema; _form?: boolean }) | undefined {
-  const p = r.shallow(raw);
-  if (!p || typeof p.name !== "string" || typeof p.in !== "string") return undefined;
+function paramFrom(r: RefResolver, raw: unknown, from: string): (ApiParam & { _body?: JSONSchema; _form?: boolean }) | undefined {
+  const loc = r.shallow(raw, from);
+  if (!loc) return undefined;
+  const p = loc.value;
+  const base = loc.base;
+  if (typeof p.name !== "string" || typeof p.in !== "string") return undefined;
   const description = typeof p.description === "string" ? p.description : undefined;
   if (p.in === "body") {
-    return { name: p.name, in: "body", required: p.required === true, description, _body: r.schema(p.schema) };
+    return { name: p.name, in: "body", required: p.required === true, description, _body: r.schema(p.schema, base) };
   }
   if (p.in === "formData") {
     const schema: JSONSchema = { type: typeof p.type === "string" ? (p.type === "file" ? "string" : p.type) : "string" };
@@ -152,10 +187,10 @@ function paramFrom(r: RefResolver, raw: unknown): (ApiParam & { _body?: JSONSche
   }
   if (p.in !== "path" && p.in !== "query" && p.in !== "header") return undefined;
   let schema: JSONSchema | undefined;
-  if (isObj(p.schema)) schema = r.schema(p.schema);
+  if (isObj(p.schema)) schema = r.schema(p.schema, base);
   else if (typeof p.type === "string") {
     schema = { type: p.type };
-    if (isObj(p.items)) schema.items = r.schema(p.items);
+    if (isObj(p.items)) schema.items = r.schema(p.items, base);
     if (Array.isArray(p.enum)) schema.enum = p.enum;
     if (p.default !== undefined) schema.default = p.default;
     if (typeof p.format === "string") schema.format = p.format;
@@ -163,10 +198,12 @@ function paramFrom(r: RefResolver, raw: unknown): (ApiParam & { _body?: JSONSche
   return { name: p.name, in: p.in, required: p.in === "path" ? true : p.required === true, schema, description };
 }
 
-function jsonBodySchema(r: RefResolver, body: unknown): { schema?: JSONSchema; required: boolean } | undefined {
-  const b = r.shallow(body);
-  if (!b || !isObj(b.content)) return undefined;
+function jsonBodySchema(r: RefResolver, body: unknown, from: string): { schema?: JSONSchema; required: boolean } | undefined {
+  const loc = r.shallow(body, from);
+  if (!loc) return undefined;
+  const b = loc.value;
   const content = b.content;
+  if (!isObj(content)) return undefined;
   const key =
     Object.keys(content).find((k) => /^application\/json/i.test(k)) ??
     Object.keys(content).find((k) => /\+json|json/i.test(k)) ??
@@ -174,13 +211,13 @@ function jsonBodySchema(r: RefResolver, body: unknown): { schema?: JSONSchema; r
   if (!key) return undefined;
   const media = content[key];
   if (!isObj(media)) return undefined;
-  const schema = r.schema(media.schema);
+  const schema = r.schema(media.schema, loc.base);
   if (typeof b.description === "string" && !schema.description) schema.description = b.description;
   return { schema, required: b.required === true };
 }
 
 /** Parse one OpenAPI 3.x / Swagger 2.0 document into endpoints. */
-export function parseOpenApiDoc(text: string, source: string): ApiEndpoint[] {
+export function parseOpenApiDoc(text: string, source: string, load?: DocLoader): ApiEndpoint[] {
   let doc: unknown;
   try {
     doc = source.endsWith(".json") ? JSON.parse(text) : parseYaml(text, { maxAliasCount: 1000 });
@@ -192,20 +229,22 @@ export function parseOpenApiDoc(text: string, source: string): ApiEndpoint[] {
     }
   }
   if (!isObj(doc) || !isObj(doc.paths)) return [];
-  const r = new RefResolver(doc);
+  const r = new RefResolver(doc, source, load);
   const prefix = pathPrefixFromServer(doc);
   const out: ApiEndpoint[] = [];
 
   for (const [rawPath, itemRaw] of Object.entries(doc.paths)) {
-    const item = r.shallow(itemRaw);
-    if (!item) continue;
+    const itemLoc = r.shallow(itemRaw, source);
+    if (!itemLoc) continue;
+    const item = itemLoc.value;
+    const itemBase = itemLoc.base;
     const shared = Array.isArray(item.parameters) ? item.parameters : [];
     for (const m of METHODS) {
       const op = item[m];
       if (!isObj(op)) continue;
       const params = new Map<string, ApiParam & { _body?: JSONSchema; _form?: boolean }>();
       for (const raw of [...shared, ...(Array.isArray(op.parameters) ? op.parameters : [])]) {
-        const p = paramFrom(r, raw);
+        const p = paramFrom(r, raw, itemBase);
         if (p) params.set(`${p.in}:${p.name}`, p); // operation-level overrides path-level
       }
       const fullPath = (prefix + (rawPath.startsWith("/") ? rawPath : "/" + rawPath)).replace(/\/{2,}/g, "/");
@@ -215,7 +254,7 @@ export function parseOpenApiDoc(text: string, source: string): ApiEndpoint[] {
       }
 
       let requestBody: JSONSchema | undefined;
-      const oas3Body = jsonBodySchema(r, op.requestBody);
+      const oas3Body = jsonBodySchema(r, op.requestBody, itemBase);
       if (oas3Body?.schema) requestBody = oas3Body.schema;
       const finalParams: ApiParam[] = [];
       const formProps: Record<string, JSONSchema> = {};
@@ -260,12 +299,73 @@ export function parseOpenApiDoc(text: string, source: string): ApiEndpoint[] {
   return out;
 }
 
+function parseDoc(text: string, source: string): unknown {
+  try {
+    return source.endsWith(".json") ? JSON.parse(text) : parseYaml(text, { maxAliasCount: 1000 });
+  } catch {
+    try {
+      return parseYaml(text, { maxAliasCount: 1000 });
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+/** Every external file a document's $refs point at (relative to the project root). */
+function externalRefs(doc: unknown, base: string, out = new Set<string>(), depth = 0): Set<string> {
+  if (depth > 64) return out;
+  if (Array.isArray(doc)) for (const v of doc) externalRefs(v, base, out, depth + 1);
+  else if (isObj(doc))
+    for (const [k, v] of Object.entries(doc)) {
+      if (k === "$ref" && typeof v === "string" && !v.startsWith("#")) {
+        const t = refTarget(v, base);
+        if (t && t.file !== base) out.add(t.file);
+      } else if (typeof v === "object" && v) externalRefs(v, base, out, depth + 1);
+    }
+  return out;
+}
+
+const MAX_REF_FILES = 800;
+const MAX_REF_BYTES = 32 * 1024 * 1024;
+
+/** Load the files a multi-file spec references (transitively, bounded), for cross-file $ref resolution. */
+async function loadRefGraph(ctx: ScanContext, root: string, rootDoc: unknown, cache: Map<string, unknown>): Promise<DocLoader> {
+  const queue = [...externalRefs(rootDoc, root)];
+  let bytes = 0;
+  let loaded = 0;
+  while (queue.length && loaded < MAX_REF_FILES && bytes < MAX_REF_BYTES) {
+    const f = queue.shift()!;
+    if (cache.has(f)) continue;
+    cache.set(f, undefined);
+    const entry = ctx.byPath.get(f);
+    if (!entry || entry.size > MAX_SPEC_BYTES) continue;
+    const text = await ctx.read(f, MAX_SPEC_BYTES);
+    if (!text) continue;
+    bytes += text.length;
+    loaded++;
+    const d = parseDoc(text, f);
+    cache.set(f, d);
+    for (const next of externalRefs(d, f)) if (!cache.has(next)) queue.push(next);
+  }
+  return (rel) => cache.get(rel);
+}
+
 export async function extractOpenApi(ctx: ScanContext): Promise<{ specs: string[]; endpoints: ApiEndpoint[] }> {
   const specs = await findOpenApiSpecs(ctx);
   const endpoints: ApiEndpoint[] = [];
+  const cache = new Map<string, unknown>();
   for (const s of specs) {
     const text = await ctx.read(s, MAX_SPEC_BYTES);
-    if (text) endpoints.push(...parseOpenApiDoc(text, s));
+    if (!text) continue;
+    let load: DocLoader | undefined;
+    if (/\$ref["']?\s*:\s*["']?(?!#)[^"'\s#]/.test(text)) {
+      try {
+        load = await loadRefGraph(ctx, s, parseDoc(text, s), cache);
+      } catch {
+        load = undefined;
+      }
+    }
+    endpoints.push(...parseOpenApiDoc(text, s, load));
   }
   return { specs, endpoints };
 }

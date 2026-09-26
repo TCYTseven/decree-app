@@ -228,52 +228,219 @@ const REST_ACTIONS: [string, Method, boolean][] = [
   ["destroy", "DELETE", true],
 ];
 
-function scanDjangoUrls(file: string, text: string, known: string[], filePrefix: Map<string, string>, edges: [string, string, string][]): PyRoute[] {
+/** A Django url()/re_path() regex piece as a plain path piece: `^articles/(?P<slug>[-\w]+)/?$` -> `articles/(?P<slug>...)/`. */
+export function djangoPiece(raw: string): string {
+  if (!(raw.startsWith("^") || raw.endsWith("$") || /\(\?P</.test(raw))) return raw;
+  return raw
+    .replace(/^\^/, "")
+    .replace(/\$$/, "")
+    .replace(/\/\?(?=\/|$)/g, "/")
+    .replace(/\/{2,}/g, "/");
+}
+
+interface DjangoView {
+  bases: string[];
+  methods: Set<string>; // lower-case http verbs / viewset actions defined in the body
+  httpMethodNames?: string[];
+  lookup?: string;
+  actions: { name: string; detail: boolean; methods: Method[]; urlPath: string }[];
+}
+
+/** Class-based views / viewsets and @api_view functions, by name. */
+export function collectDjangoViews(sources: Map<string, string>): { classes: Map<string, DjangoView>; funcs: Map<string, Method[]> } {
+  const classes = new Map<string, DjangoView>();
+  const funcs = new Map<string, Method[]>();
+  for (const [file, text] of sources) {
+    if (!file.endsWith(".py") || !/rest_framework|django\.views|APIView|ViewSet|api_view|View\)/.test(text)) continue;
+    const lines = text.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      // class headers may wrap: `class ArticleViewSet(mixins.CreateModelMixin,\n    viewsets.GenericViewSet):`
+      const header = /^\s*class\s+\w+\s*\([^)]*$/.test(lines[i]!) ? lines.slice(i, i + 8).join(" ") : lines[i]!;
+      const c = /^(\s*)class\s+(\w+)\s*\(([^)]*)\)\s*:/.exec(header);
+      if (c) {
+        const indent = c[1]!.length;
+        const view: DjangoView = { bases: c[3]!.split(",").map((b) => b.trim().split(".").pop()!).filter(Boolean), methods: new Set(), actions: [] };
+        let pendingAction: { detail: boolean; methods: Method[]; urlPath?: string } | undefined;
+        for (let j = i + 1; j < lines.length; j++) {
+          const l = lines[j]!;
+          if (!l.trim()) continue;
+          if (l.length - l.trimStart().length <= indent) break;
+          const t = l.trim();
+          const act = /^@action\((.*)$/.exec(t);
+          if (act) {
+            // decorator args may span lines; take a few
+            const args = [t, ...lines.slice(j + 1, j + 6)].join(" ");
+            const ms = /methods\s*=\s*\[([^\]]*)\]/.exec(args)?.[1];
+            pendingAction = {
+              detail: /detail\s*=\s*True/.test(args),
+              methods: ms ? [...ms.matchAll(/['"](\w+)['"]/g)].map((x) => toMethod(x[1]!)).filter((x): x is Method => !!x) : ["GET"],
+              urlPath: /url_path\s*=\s*r?['"]([^'"]+)['"]/.exec(args)?.[1],
+            };
+            continue;
+          }
+          const def = /^(?:async\s+)?def\s+(\w+)\s*\(/.exec(t);
+          if (def) {
+            if (pendingAction) view.actions.push({ name: def[1]!, detail: pendingAction.detail, methods: pendingAction.methods, urlPath: pendingAction.urlPath ?? def[1]! });
+            else view.methods.add(def[1]!);
+            pendingAction = undefined;
+            continue;
+          }
+          const lk = /^lookup_(?:url_kwarg|field)\s*=\s*['"](\w+)['"]/.exec(t);
+          if (lk && (!view.lookup || t.startsWith("lookup_url_kwarg"))) view.lookup = lk[1]!;
+          const hm = /^http_method_names\s*=\s*\[([^\]]*)\]/.exec(t);
+          if (hm) view.httpMethodNames = [...hm[1]!.matchAll(/['"](\w+)['"]/g)].map((x) => x[1]!.toLowerCase());
+        }
+        if (!classes.has(c[2]!)) classes.set(c[2]!, view);
+        continue;
+      }
+      const av = /^@api_view\(\s*\[([^\]]*)\]/.exec(lines[i]!.trim());
+      if (av) {
+        for (let j = i + 1; j < Math.min(lines.length, i + 8); j++) {
+          const d = /^(?:async\s+)?def\s+(\w+)/.exec(lines[j]!.trim());
+          if (d) {
+            funcs.set(d[1]!, [...av[1]!.matchAll(/['"](\w+)['"]/g)].map((x) => toMethod(x[1]!)).filter((x): x is Method => !!x));
+            break;
+          }
+        }
+      }
+    }
+  }
+  return { classes, funcs };
+}
+
+const HTTP_VERBS = ["get", "post", "put", "patch", "delete"];
+
+/** HTTP methods a Django / DRF class-based view answers. */
+function viewMethods(name: string, views: Map<string, DjangoView>, depth = 0): Set<Method> {
+  const out = new Set<Method>();
+  const v = views.get(name);
+  const fromBase = (b: string) => {
+    if (depth < 4 && views.has(b)) for (const m of viewMethods(b, views, depth + 1)) out.add(m);
+    if (!/(APIView|View)$/.test(b)) return;
+    if (/List|Retrieve|Detail|Template|Redirect/.test(b) || /^(ListView|DetailView)$/.test(b)) out.add("GET");
+    if (/Create/.test(b)) out.add("POST");
+    if (/Update/.test(b)) {
+      out.add(/APIView$/.test(b) ? "PUT" : "POST");
+      if (/APIView$/.test(b)) out.add("PATCH");
+    }
+    if (/Destroy/.test(b)) out.add("DELETE");
+    if (/^(CreateView|UpdateView|DeleteView|FormView)$/.test(b)) {
+      out.add("GET");
+      out.add("POST");
+    }
+  };
+  if (!v) {
+    fromBase(name);
+    return out;
+  }
+  for (const m of v.methods) if (HTTP_VERBS.includes(m)) out.add(toMethod(m)!);
+  for (const b of v.bases) fromBase(b);
+  if (v.httpMethodNames) for (const m of [...out]) if (!v.httpMethodNames.includes(m.toLowerCase())) out.delete(m);
+  return out;
+}
+
+const MIXIN_ACTIONS: Record<string, string[]> = {
+  ListModelMixin: ["list"],
+  CreateModelMixin: ["create"],
+  RetrieveModelMixin: ["retrieve"],
+  UpdateModelMixin: ["update", "partial_update"],
+  DestroyModelMixin: ["destroy"],
+  ModelViewSet: ["list", "create", "retrieve", "update", "partial_update", "destroy"],
+  ReadOnlyModelViewSet: ["list", "retrieve"],
+};
+
+/** Viewset actions (list/create/...), or undefined when the class is unknown. */
+function viewsetActions(name: string, views: Map<string, DjangoView>, depth = 0): Set<string> | undefined {
+  const v = views.get(name);
+  if (!v) return MIXIN_ACTIONS[name] ? new Set(MIXIN_ACTIONS[name]) : undefined;
+  const out = new Set<string>();
+  for (const m of v.methods) if (REST_ACTIONS.some(([a]) => a === m)) out.add(m);
+  for (const b of v.bases) {
+    for (const a of MIXIN_ACTIONS[b] ?? []) out.add(a);
+    if (depth < 4 && views.has(b)) for (const a of viewsetActions(b, views, depth + 1) ?? []) out.add(a);
+  }
+  return out;
+}
+
+function scanDjangoUrls(
+  file: string,
+  text: string,
+  known: string[],
+  filePrefix: Map<string, string>,
+  edges: [string, string, string][],
+  views: ReturnType<typeof collectDjangoViews> = { classes: new Map(), funcs: new Map() },
+): PyRoute[] {
   const out: PyRoute[] = [];
+  // Module docstrings in urls.py carry example url() calls (Django's own template does): blank them out.
+  text = text.replace(/("""|\'\'\')[\s\S]*?\1/g, (m) => m.replace(/[^\n]/g, " "));
   const lineOf = lineIndex(text);
   const prefix = filePrefix.get(file) ?? "";
-  let routerPrefix = "";
-  const inc = /\b(?:re_)?path\(\s*r?(['"])([^'"]*)\1\s*,\s*include\(\s*(\w+)\.urls/.exec(text);
-  if (inc) routerPrefix = inc[2]!;
+  const piece = (raw: string) => "/" + djangoPiece(raw).replace(/^\//, "");
+  const routerPrefix = new Map<string, string>(); // router var -> include prefix
+  for (const inc of text.matchAll(/\b(?:re_path|path|url)\(\s*r?(['"])([^'"]*)\1\s*,\s*include\(\s*(\w+)\.urls/g)) routerPrefix.set(inc[3]!, inc[2]!);
+  const noSlash = new Set<string>();
+  for (const r of text.matchAll(/\b(\w+)\s*=\s*(?:\w+\.)?\w*Router\(([^)]*)\)/g)) if (/trailing_slash\s*=\s*(False|['"]{2})/.test(r[2]!)) noSlash.add(r[1]!);
   for (const m of text.matchAll(/\b(re_path|path|url)\(\s*r?(['"])([^'"]*)\2\s*,\s*([^\n]*)/g)) {
     const rest = m[4]!;
     const incStr = /^include\(\s*(['"])([\w.]+)\1/.exec(rest);
     if (incStr) {
       const target = findModuleFile(incStr[2]!, known);
-      if (target) edges.push([file, target, m[3]!]);
+      if (target) edges.push([file, target, djangoPiece(m[3]!)]);
       continue;
     }
     if (/^include\(/.test(rest)) continue;
     const view = /^([\w.]+)(?:\.as_view\(|,|\))/.exec(rest)?.[1];
     const name = /name\s*=\s*['"]([\w-]+)['"]/.exec(rest)?.[1];
-    out.push({
-      method: "GET",
-      path: "",
-      rawPath: joinPath(prefix, m[3]!.startsWith("^") ? m[3]! : "/" + m[3]!, true),
-      receiver: "",
-      file,
-      line: lineOf(m.index!),
-      operationId: name ?? view?.split(".").pop(),
-      summary: view ? `Django view ${view}` : undefined,
-    });
-  }
-  // DRF routers
-  for (const m of text.matchAll(/\b\w+\.register\(\s*r?(['"])([^'"]*)\1\s*,\s*(\w+)/g)) {
-    const base = joinPath(joinPath(prefix, "/" + routerPrefix, true), "/" + m[2]!, true).replace(/\/$/, "");
-    const viewset = m[3]!;
-    const readOnly = /ReadOnly/.test(viewset);
-    for (const [action, method, detail] of REST_ACTIONS) {
-      if (readOnly && method !== "GET") continue;
+    const viewName = view?.split(".").pop();
+    let methods: Method[] = ["GET"];
+    if (viewName && /\.as_view\(/.test(rest)) {
+      const ms = viewMethods(viewName, views.classes);
+      if (ms.size) methods = [...ms];
+    } else if (viewName && views.funcs.get(viewName)?.length) methods = views.funcs.get(viewName)!;
+    for (const method of methods)
       out.push({
         method,
         path: "",
-        rawPath: detail ? `${base}/{id}/` : `${base}/`,
+        rawPath: joinPath(prefix, piece(m[3]!), true),
+        receiver: "",
+        file,
+        line: lineOf(m.index!),
+        operationId: name ?? viewName,
+        summary: view ? `Django view ${view}` : undefined,
+      });
+  }
+  // DRF routers
+  for (const m of text.matchAll(/\b(\w+)\.register\(\s*r?(['"])([^'"]*)\2\s*,\s*([\w.]+)/g)) {
+    const base = joinPath(joinPath(prefix, piece(routerPrefix.get(m[1]!) ?? ""), true), piece(m[3]!), true).replace(/\/$/, "");
+    const slash = noSlash.has(m[1]!) ? "" : "/";
+    const viewset = m[4]!.split(".").pop()!;
+    const info = views.classes.get(viewset);
+    const lookup = info?.lookup ?? "id";
+    let actions = viewsetActions(viewset, views.classes);
+    if (!actions?.size) actions = new Set(/ReadOnly/.test(viewset) ? ["list", "retrieve"] : REST_ACTIONS.map(([a]) => a));
+    for (const [action, method, detail] of REST_ACTIONS) {
+      if (!actions.has(action)) continue;
+      out.push({
+        method,
+        path: "",
+        rawPath: detail ? `${base}/{${lookup}}${slash}` : `${base}${slash}`,
         receiver: "",
         file,
         line: lineOf(m.index!),
         operationId: `${viewset}.${action}`,
       });
     }
+    for (const a of info?.actions ?? [])
+      for (const method of a.methods)
+        out.push({
+          method,
+          path: "",
+          rawPath: `${base}${a.detail ? `/{${lookup}}` : ""}/${a.urlPath}${slash}`,
+          receiver: "",
+          file,
+          line: lineOf(m.index!),
+          operationId: `${viewset}.${a.name}`,
+        });
   }
   return out;
 }
@@ -329,8 +496,9 @@ export function detectPythonRoutes(sources: Map<string, string>): RouteHit[] {
     const djEdges: [string, string, string][] = [];
     for (const f of urlFiles) scanDjangoUrls(f, sources.get(f)!, pyFiles, djangoPrefix, djEdges);
     for (let i = 0; i < 6; i++)
-      for (const [from, to, p] of djEdges) djangoPrefix.set(to, joinPath(djangoPrefix.get(from) ?? "", "/" + p, true));
-    for (const f of urlFiles) routes.push(...scanDjangoUrls(f, sources.get(f)!, pyFiles, djangoPrefix, []));
+      for (const [from, to, p] of djEdges) djangoPrefix.set(to, joinPath(djangoPrefix.get(from) ?? "", "/" + p.replace(/^\//, ""), true));
+    const views = collectDjangoViews(sources);
+    for (const f of urlFiles) routes.push(...scanDjangoUrls(f, sources.get(f)!, pyFiles, djangoPrefix, [], views));
   }
 
   const filePrefix = new Map<string, string>();

@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { ApiParam, JSONSchema } from "../../core/types.js";
 import { lineIndex } from "../context.js";
 import {
@@ -27,6 +28,84 @@ const ROUTER_HINT = /\b(express|fastify|hono|koa|@koa\/router|koa-router|Router\
 
 interface JsRoute extends RouteHit {
   receiver?: string;
+  /** NestJS controller route (global prefix / URI versioning apply). */
+  nest?: boolean;
+  version?: string;
+}
+
+interface NestApp {
+  /** Directory the Nest app lives in ("" = root); routes below it get its global prefix. */
+  root: string;
+  prefix: string;
+  exclude: string[];
+  /** URI versioning: prefix before the version ("v" by default) and the default version. */
+  uriVersioning?: { prefix: string; defaultVersion?: string };
+}
+
+/** App root for a Nest bootstrap file: `apps/api/src/main.ts` -> `apps/api`. */
+function appRootOf(file: string): string {
+  const dir = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : "";
+  const m = /^(.*?)(?:^|\/)src(?:\/.*)?$/.exec(dir);
+  return m ? m[1]! : dir;
+}
+
+/** `app.setGlobalPrefix('api', { exclude: [...] })` and `app.enableVersioning({ type: VersioningType.URI })`. */
+function nestAppConfig(file: string, text: string): NestApp | undefined {
+  const gp = /\.setGlobalPrefix\(\s*(['"`])([^'"`$]*)\1/.exec(text);
+  const ev = /\.enableVersioning\(/.exec(text);
+  if (!gp && !ev) return undefined;
+  const app: NestApp = { root: appRootOf(file), prefix: gp ? normalizePath(gp[2]!).path : "", exclude: [] };
+  if (gp) {
+    const open = text.indexOf("(", gp.index!);
+    const close = matchBracket(text, open);
+    const args = close > 0 ? text.slice(open + 1, close) : "";
+    const ex = /\bexclude\s*:\s*\[([^\]]*)\]/.exec(args)?.[1];
+    if (ex) for (const x of ex.matchAll(/(['"`])([^'"`]+)\1|\bpath\s*:\s*(['"`])([^'"`]+)\3/g)) app.exclude.push(normalizePath(x[2] ?? x[4]!).path);
+  }
+  if (ev) {
+    const open = text.indexOf("(", ev.index!);
+    const close = matchBracket(text, open);
+    const args = close > 0 ? text.slice(open + 1, close) : "";
+    // enableVersioning() without a type defaults to URI versioning.
+    if (/VersioningType\.URI\b/.test(args) || !/\btype\s*:/.test(args)) {
+      const pre = /\bprefix\s*:\s*(['"`])([^'"`]*)\1/.exec(args)?.[2];
+      const noPrefix = /\bprefix\s*:\s*false/.test(args);
+      app.uriVersioning = { prefix: noPrefix ? "" : (pre ?? "v") };
+      const dv = /\bdefaultVersion\s*:\s*\[?\s*(['"`])([^'"`]+)\1/.exec(args)?.[2];
+      if (dv) app.uriVersioning.defaultVersion = dv;
+    }
+  }
+  return app;
+}
+
+/**
+ * @fastify/autoload: `register(autoload, { dir: path.join(__dirname, 'routes'), options: { prefix: '/api' } })`.
+ * Every file below that directory is registered with its directory path as prefix (`_id` dirs become `{id}`).
+ */
+interface AutoloadDir {
+  dir: string;
+  prefix: string;
+}
+
+function fastifyAutoloadDirs(file: string, text: string): AutoloadDir[] {
+  if (!/@fastify\/autoload|fastify-autoload/.test(text)) return [];
+  const out: AutoloadDir[] = [];
+  const base = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : "";
+  for (const m of text.matchAll(/\.register\(\s*[\w$]+\s*,\s*\{/g)) {
+    const open = m.index! + m[0].length - 1;
+    const close = matchBracket(text, open);
+    if (close < 0) continue;
+    const obj = text.slice(open, close + 1);
+    const d =
+      /\bdir\s*:\s*(?:path\.)?(?:join|resolve)\(\s*(?:__dirname|import\.meta\.dirname|dirname\([^)]*\)|[\w$]+)\s*,\s*((?:(['"`])[^'"`$]*\2\s*,?\s*)+)\)/.exec(obj);
+    if (!d) continue;
+    const segs = [...d[1]!.matchAll(/(['"`])([^'"`$]*)\1/g)].map((x) => x[2]!);
+    const dir = path.posix.normalize(path.posix.join(base || ".", ...segs)).replace(/^\.\/?/, "").replace(/\/$/, "");
+    if (dir.startsWith("..")) continue;
+    const prefix = /\boptions\s*:\s*\{[^}]*?\bprefix\s*:\s*(['"`])([^'"`$]*)\1/.exec(obj)?.[2] ?? "";
+    out.push({ dir, prefix: prefix ? normalizePath(prefix).path : "" });
+  }
+  return out;
 }
 
 interface Mount {
@@ -113,6 +192,9 @@ function scanRouterCalls(file: string, text: string, lineOf: (i: number) => numb
     const v = /^([A-Za-z_$][\w$]*)(?:\.routes\(\)|\.router)?$/.exec(last.trim());
     if (v) mounts.push({ from: file, prefix: normalizePath(m[4]!).path, receiver: v[1]! });
   }
+  // hono: const api = new Hono().basePath('/api')  |  const v1 = app.basePath('/v1')
+  for (const m of text.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:new\s+Hono\s*(?:<[^>()]*>)?\(\s*\)|[A-Za-z_$][\w$]*)\s*\.\s*basePath\(\s*(['"`])(\/[^'"`$]*)\2/g))
+    mounts.push({ from: file, prefix: normalizePath(m[3]!).path, receiver: m[1]! });
   // fastify.register(plugin, { prefix: '/x' })
   for (const m of text.matchAll(/\.\s*register\(\s*([A-Za-z_$][\w$]*)\s*,\s*\{[^}]*?\bprefix\s*:\s*(['"`])(\/[^'"`$]*)\2/g))
     mounts.push({ from: file, prefix: normalizePath(m[3]!).path, receiver: m[1]! });
@@ -156,9 +238,16 @@ export function collectTsModels(sources: Map<string, string>): Map<string, JSONS
   return models;
 }
 
+/** First version string in a Nest `version: '1'` / `version: ['1', '2']` option or `@Version('1')` argument. */
+function nestVersion(arg: string, key = true): string | undefined {
+  const re = key ? /\bversion\s*:\s*\[?\s*(['"`])([^'"`]+)\1/ : /^\s*\[?\s*(['"`])([^'"`]+)\1/;
+  return re.exec(arg)?.[2];
+}
+
 function scanNest(file: string, text: string, lineOf: (i: number) => number, models: Map<string, JSONSchema>): JsRoute[] {
   const routes: JsRoute[] = [];
   let prefix = "";
+  let ctrlVersion: string | undefined;
   const re = /@(Controller|Get|Post|Put|Patch|Delete|Head|Options)\(/g;
   for (const m of text.matchAll(re)) {
     const open = m.index! + m[0].length - 1;
@@ -168,12 +257,20 @@ function scanNest(file: string, text: string, lineOf: (i: number) => number, mod
     let p = stringArg(arg) ?? /\bpath\s*:\s*(['"`])([^'"`]*)\1/.exec(arg)?.[2] ?? /^\[\s*(['"`])([^'"`]*)\1/.exec(arg)?.[2] ?? "";
     if (m[1] === "Controller") {
       prefix = normalizePath(p).path;
+      ctrlVersion = nestVersion(arg);
       continue;
     }
     const method = toMethod(m[1]!);
     if (!method) continue;
     const { path, types } = normalizePath(joinPath(prefix, normalizePath(p).path));
-    const hit: JsRoute = { method, path, file, line: lineOf(m.index!), pathTypes: types };
+    const hit: JsRoute = { method, path, file, line: lineOf(m.index!), pathTypes: types, nest: true };
+    // @Version('2') among the handler's decorators overrides the controller version.
+    const decoBlock = /^(?:\s*@\w+(?:\((?:[^()]|\([^()]*\))*\))?)*/.exec(text.slice(close + 1, close + 1500))?.[0] ?? "";
+    const before = text.slice(Math.max(0, m.index! - 600), m.index!);
+    const preBlock = before.slice(Math.max(before.lastIndexOf("}"), before.lastIndexOf(";"), before.lastIndexOf("{")) + 1);
+    const methodVersion = /@Version\(([^)]*)\)/.exec(preBlock + decoBlock)?.[1];
+    const version = (methodVersion !== undefined ? nestVersion(methodVersion, false) : undefined) ?? ctrlVersion;
+    if (version) hit.version = version;
     // handler signature: skip following decorators, find `name(...)`
     const after = text.slice(close + 1, close + 1500);
     const sig = /^(?:\s*@\w+(?:\((?:[^()]|\([^()]*\))*\))?)*\s*(?:public\s+|private\s+|protected\s+)?(?:async\s+)?(\w+)\s*\(/.exec(after);
@@ -287,8 +384,15 @@ export function detectJsRoutes(sources: Map<string, string>): RouteHit[] {
   const all: JsRoute[] = [];
   const mounts: Mount[] = [];
   let models: Map<string, JSONSchema> | undefined;
+  const nestApps: NestApp[] = [];
+  const autoload: AutoloadDir[] = [];
   for (const [file, text] of sources) {
     if (!JS_EXT.test(file)) continue;
+    if (/setGlobalPrefix|enableVersioning/.test(text)) {
+      const app = nestAppConfig(file, text);
+      if (app) nestApps.push(app);
+    }
+    if (/autoload/i.test(text)) autoload.push(...fastifyAutoloadDirs(file, text));
     let lines: ((i: number) => number) | undefined;
     const lineOf = (i: number) => (lines ??= lineIndex(text))(i);
     if (nextAppPath(file) !== undefined || nextPagesApiPath(file) !== undefined) {
@@ -331,12 +435,42 @@ export function detectJsRoutes(sources: Map<string, string>): RouteHit[] {
   }
   for (const r of all) {
     if (nextAppPath(r.file) !== undefined || nextPagesApiPath(r.file) !== undefined) continue;
+    if (r.nest) {
+      r.path = nestPath(r, nestApps);
+      continue;
+    }
     let p = r.path;
     const local = mounts.find((mt) => !mt.target && mt.from === r.file && mt.receiver === r.receiver);
     if (local) p = joinPath(local.prefix, p);
     const fp = filePrefix.get(r.file);
     if (fp) p = joinPath(fp, p);
+    // @fastify/autoload: the file's directory below the routes dir is its prefix.
+    const al = fp ? undefined : autoloadPrefix(r.file, autoload);
+    if (al !== undefined) p = joinPath(al, p);
     r.path = p;
   }
-  return all.map(({ receiver: _r, ...hit }) => hit);
+  return all.map(({ receiver: _r, nest: _n, version: _v, ...hit }) => hit);
+}
+
+function autoloadPrefix(file: string, dirs: AutoloadDir[]): string | undefined {
+  let best: AutoloadDir | undefined;
+  for (const d of dirs)
+    if ((d.dir === "" || file.startsWith(d.dir + "/")) && (!best || d.dir.length > best.dir.length)) best = d;
+  if (!best) return undefined;
+  const rel = best.dir ? file.slice(best.dir.length + 1) : file;
+  const segs = rel.split("/").slice(0, -1).map((seg) => (seg.startsWith("_") ? `{${seg.slice(1)}}` : seg));
+  return joinPath(best.prefix, segs.length ? "/" + segs.join("/") : "");
+}
+
+/** Apply the owning Nest app's global prefix and URI version to a controller route. */
+function nestPath(r: JsRoute, apps: NestApp[]): string {
+  let app: NestApp | undefined;
+  for (const a of apps) if ((a.root === "" || r.file.startsWith(a.root + "/")) && (!app || a.root.length > app.root.length)) app = a;
+  if (!app) return r.path;
+  let p = r.path;
+  const version = r.version ?? app.uriVersioning?.defaultVersion;
+  if (app.uriVersioning && version && version !== "VERSION_NEUTRAL") p = joinPath(`/${app.uriVersioning.prefix}${version}`, p);
+  if (app.prefix && !app.exclude.some((x) => x === r.path)) p = joinPath(app.prefix, p);
+  const { path: norm } = normalizePath(p);
+  return norm;
 }

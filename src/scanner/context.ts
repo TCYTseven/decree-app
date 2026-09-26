@@ -118,14 +118,23 @@ export const CODE_EXTS = new Set([
 ]);
 
 const TEST_PATH_RE =
-  /(^|\/)(__tests__|__mocks__|tests?|spec|specs|e2e|cypress|playwright|fixtures?|testdata|examples?)\//i;
+  /(^|\/)(__tests__|__mocks__|tests?|spec|specs|e2e|cypress|playwright|fixtures?|testdata|_?examples?|code[-_]?samples|benches|benchmarks?|playgrounds?)\//i;
 const TEST_FILE_RE = /(\.|_)(test|spec)\.[a-z]+$|^test_.*\.py$|_test\.go$|\.stories\.[a-z]+$/i;
 
-const FIXTURE_PATH_RE = /(^|\/)(__tests__|__mocks__|tests?|fixtures?|testdata|examples?|samples?|e2e|cypress|playwright)\//i;
+const FIXTURE_PATH_RE = /(^|\/)(__tests__|__mocks__|tests?|fixtures?|testdata|_?examples?|samples?|code[-_]?samples|e2e|cypress|playwright)\//i;
+
+/**
+ * JVM sources live under package directories (`src/main/java/org/springframework/samples/...`): a package named
+ * `samples` or `test` says nothing about the file being a fixture. Only the part up to the source root counts.
+ */
+export function outsideJvmPackage(rel: string): string {
+  const m = /^(.*?(?:^|\/)src\/[\w-]+\/(?:java|kotlin|scala|groovy)\/)/.exec(rel);
+  return m ? m[1]! : rel;
+}
 
 /** Paths holding test fixtures / examples: their manifests and specs describe other projects. */
 export function isFixturePath(rel: string): boolean {
-  return FIXTURE_PATH_RE.test(rel);
+  return FIXTURE_PATH_RE.test(outsideJvmPackage(rel));
 }
 
 /**
@@ -136,18 +145,34 @@ export function isFixturePath(rel: string): boolean {
 export function stripComments(rel: string, text: string): string {
   const blank = (m: string) => m.replace(/[^\n]/g, " ");
   if (/\.(py|rb|ex|exs)$/.test(rel)) return text.replace(/^[ \t]*#.*$/gm, blank);
-  let out = text.replace(/^[ \t]*\/\/.*$/gm, blank);
-  out = out.replace(/\/\*[\s\S]*?\*\//g, (m, offset: number) => {
+  const out = text.replace(/^[ \t]*\/\/.*$/gm, blank);
+  // Linear scan (a lazy /\/\*[\s\S]*?\*\// regex rescans to the end for every unclosed opener: quadratic).
+  const parts: string[] = [];
+  let pos = 0;
+  for (;;) {
+    const start = out.indexOf("/*", pos);
+    if (start < 0) break;
+    const end = out.indexOf("*/", start + 2);
+    if (end < 0) break;
     // Only treat as a comment when it starts a line or follows code punctuation, not inside a string like "src/**/*.ts".
-    const before = out.slice(Math.max(0, offset - 1), offset);
-    return before === "" || /[\s;{}(),=]/.test(before) ? blank(m) : m;
-  });
-  return out;
+    const before = start > 0 ? out[start - 1]! : "";
+    if (before === "" || /[\s;{}(),=]/.test(before)) {
+      parts.push(out.slice(pos, start), blank(out.slice(start, end + 2)));
+      pos = end + 2;
+    } else {
+      // not a comment: the regex version resumed after this whole match, so do the same
+      parts.push(out.slice(pos, end + 2));
+      pos = end + 2;
+    }
+  }
+  if (!parts.length) return out;
+  parts.push(out.slice(pos));
+  return parts.join("");
 }
 
 export function isTestPath(rel: string): boolean {
   const name = rel.slice(rel.lastIndexOf("/") + 1);
-  return TEST_PATH_RE.test(rel) || TEST_FILE_RE.test(name);
+  return TEST_PATH_RE.test(outsideJvmPackage(rel)) || TEST_FILE_RE.test(name);
 }
 
 /** Source files worth reading for route/env/model detection. */

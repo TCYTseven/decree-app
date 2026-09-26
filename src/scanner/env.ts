@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { EnvVarInfo } from "../core/types.js";
 import type { ScanContext } from "./context.js";
+import { looksLikeToken, maskUrlCredentials } from "./secret-shapes.js";
 
 const EXAMPLE_FILE_RE = /^(\.env\.(example|sample|template|dist|defaults|tpl|example\.local|local\.example|development\.example|test\.example)|example\.env|env\.example|\.env\.[\w-]+\.(example|sample|template))$/i;
 
@@ -26,6 +27,10 @@ export function isSecretName(name: string): boolean {
 /** Example values are only kept when they are clearly placeholders or the var is not secret. */
 function safeExample(name: string, value: string, secret: boolean): string | undefined {
   if (!value) return undefined;
+  // A value shaped like a real credential is never kept, even in an example file or under a harmless name;
+  // URL passwords for non-local hosts are masked in place.
+  if (looksLikeToken(value)) return undefined;
+  value = maskUrlCredentials(value);
   if (!secret) return value.length > 200 ? value.slice(0, 200) : value;
   const placeholder = /^(<.*>|\$\{.*\}|x{3,}|\*{3,}|your[-_ ].*|change[-_ ]?me.*|replace[-_ ]?me.*|todo|example.*|dummy.*|test.*|placeholder.*|secret|password|sk-\.\.\.|\.\.\.|null|none|changeit)$/i;
   return placeholder.test(value) || /your|example|changeme|replace|placeholder|xxxx|\.\.\./i.test(value) ? value : undefined;
@@ -68,6 +73,8 @@ export async function detectEnvVars(ctx: ScanContext, sources: Map<string, strin
   const vars = new Map<string, EnvVarInfo>();
   const add = (name: string, source: string, example?: string) => {
     if (IGNORED_NAMES.has(name) || name.startsWith("npm_")) return;
+    // `__`, `_`, `X`: placeholders and loop variables, never configuration.
+    if (name.length < 2 || !/[A-Za-z]{2}/.test(name) || /^_/.test(name)) return;
     const secret = isSecretName(name);
     const prev = vars.get(name);
     const ex = example !== undefined ? safeExample(name, example, secret) : undefined;

@@ -1,3 +1,4 @@
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { ApiEndpoint, ProjectProfile } from "../core/types.js";
 import { detectCli } from "./cli.js";
@@ -14,6 +15,7 @@ import { extractOpenApi } from "./openapi.js";
 import { dedupeEndpoints, detectRoutes } from "./routes/index.js";
 import { renderTree } from "./tree.js";
 import { walkProject } from "./walk.js";
+import { detectWorkspaces, tagEndpointsByWorkspace, workspaceScripts } from "./workspaces.js";
 
 export interface ScanOptions {
   maxFiles?: number; // default 20000; stop walking after this many files and set stats.truncated
@@ -49,6 +51,14 @@ export async function scanProject(root: string, opts: ScanOptions = {}): Promise
     }
   };
   const maxFiles = opts.maxFiles ?? 20000;
+  let rootStat: import("node:fs").Stats;
+  try {
+    rootStat = await fs.stat(absRoot);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    throw new Error(code === "ENOENT" ? `Cannot scan ${absRoot}: no such directory` : `Cannot scan ${absRoot}: ${code ?? String(e)}`);
+  }
+  if (!rootStat.isDirectory()) throw new Error(`Cannot scan ${absRoot}: not a directory`);
 
   progress("Walking files");
   const walk = await walkProject(absRoot, maxFiles);
@@ -82,8 +92,15 @@ export async function scanProject(root: string, opts: ScanOptions = {}): Promise
 
   progress(`Detecting routes in ${sources.size} source files`);
   const codeRoutes = detectRoutes(sources);
-  const apis: ApiEndpoint[] = dedupeEndpoints([...openapi.endpoints, ...codeRoutes]);
+  const apis: ApiEndpoint[] = dedupeEndpoints([...openapi.endpoints, ...dropPrefixlessDuplicates(codeRoutes, openapi.endpoints)]);
   progress(`Found ${apis.length} API endpoints`);
+
+  const pm = choosePackageManager(manifests.packageManagers, primaryLanguage);
+  const workspaces = await detectWorkspaces(ctx, manifests.workspaces).catch(() => []);
+  if (workspaces.length >= 2) {
+    progress(`Monorepo with ${workspaces.length} workspaces`);
+    tagEndpointsByWorkspace(apis, workspaces);
+  }
 
   progress("Collecting environment variables");
   const envVars = await detectEnvVars(ctx, sources);
@@ -115,7 +132,7 @@ export async function scanProject(root: string, opts: ScanOptions = {}): Promise
     name,
     languages,
     frameworks,
-    scripts: manifests.scripts,
+    scripts: workspaces.length >= 2 ? [...manifests.scripts, ...workspaceScripts(workspaces, pm, manifests.scripts)] : manifests.scripts,
     apis,
     openapiSpecs: openapi.specs,
     envVars,
@@ -129,7 +146,6 @@ export async function scanProject(root: string, opts: ScanOptions = {}): Promise
   const description = manifests.description ?? readmeSummary(docs.readme);
   if (description) profile.description = description;
   if (primaryLanguage) profile.primaryLanguage = primaryLanguage;
-  const pm = choosePackageManager(manifests.packageManagers, primaryLanguage);
   if (pm) profile.packageManager = pm;
   if (cli) profile.cli = cli;
   if (database) profile.database = database;
@@ -137,6 +153,25 @@ export async function scanProject(root: string, opts: ScanOptions = {}): Promise
   profile.stats.scanMs = Date.now() - started;
   progress(`Scan complete in ${profile.stats.scanMs}ms`);
   return profile;
+}
+
+/**
+ * A code route that matches a spec route except for a short mount prefix the detector could not see
+ * (`GET /users/{id}` in code, `GET /api/v1/users/{id}` in openapi.yaml) is the same endpoint: keep the spec's.
+ */
+export function dropPrefixlessDuplicates(code: ApiEndpoint[], spec: ApiEndpoint[]): ApiEndpoint[] {
+  if (!spec.length) return code;
+  const norm = (p: string) => p.replace(/\{[^}]+\}/g, "{}").replace(/\/+$/, "").toLowerCase();
+  const specKeys = spec.map((e) => ({ method: e.method, path: norm(e.path) }));
+  return code.filter((c) => {
+    const p = norm(c.path);
+    if (!p || p === "/" || p.split("/").length < 2) return true;
+    return !specKeys.some((s) => {
+      if (s.method !== c.method || s.path.length <= p.length || !s.path.endsWith(p)) return false;
+      const prefix = s.path.slice(0, s.path.length - p.length);
+      return /^(\/[\w.-]+){1,2}$/.test(prefix);
+    });
+  });
 }
 
 /** Framework hints from imports, for projects without (parseable) manifests. */
