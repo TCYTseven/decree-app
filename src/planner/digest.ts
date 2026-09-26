@@ -4,7 +4,8 @@
  * tree and README.
  */
 import type { ApiEndpoint, JSONSchema, ProjectProfile } from "../core/types.js";
-import { clip, isPlainObject } from "./util.js";
+import { cleanRoutePath, clip, isPlainObject } from "./util.js";
+import { isInjectedParam } from "./heuristic.js";
 import { maskSecrets } from "../core/mask-secrets.js";
 
 export interface DigestOptions {
@@ -38,9 +39,14 @@ function bodySummary(body: JSONSchema | undefined): string {
 }
 
 function endpointRow(e: ApiEndpoint): string {
-  const params = e.params.map((p) => `${p.name}(${p.in}${p.required ? ",req" : ""})`).join(" ");
+  // Framework-injected parameters (FastAPI SessionDep/CurrentUser) are not part of the HTTP interface.
+  const injected = e.params.filter(isInjectedParam);
+  const params = [
+    ...e.params.filter((p) => !injected.includes(p)).map((p) => `${p.name}(${p.in}${p.required ? ",req" : ""})`),
+    ...(injected.some((p) => /current_?user/i.test(`${p.name} ${p.description ?? ""}`)) ? ["[auth required]"] : []),
+  ].join(" ");
   const cells = [
-    `${e.method} ${e.path}`,
+    `${e.method} ${cleanRoutePath(e.path)}`,
     e.operationId ?? "",
     e.summary ? clip(e.summary.replace(/\s+/g, " "), 80) : "",
     params,

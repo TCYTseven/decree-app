@@ -75,7 +75,8 @@ describe("planHeuristic", () => {
     expect(spec.provenance.notes!.some((n) => /omitted 60/.test(n))).toBe(true);
     expect(validateSpec(spec).ok).toBe(true);
     // Large tool surface -> split subagents, read-only only.
-    expect(spec.subagents.map((s) => s.name)).toEqual(expect.arrayContaining(["api-investigator", "code-investigator"]));
+    // Only the API investigator pays for itself: the 42-file repo is small enough to read directly.
+    expect(spec.subagents.map((s) => s.name)).toEqual(["api-investigator"]);
     for (const s of spec.subagents) {
       for (const n of s.tools) expect(spec.tools.find((t) => t.name === n)!.destructive).toBe(false);
     }
@@ -165,10 +166,14 @@ describe("planHeuristic", () => {
     expect(p).not.toMatch(/\b(MUST|NEVER|CRITICAL|IMPORTANT)\b/);
   });
 
-  it("handles a bare profile (no apis, no scripts)", () => {
+  it("handles a bare profile (no apis, no scripts) with a coding harness", () => {
     const profile = sampleProfile({ apis: [], scripts: [], envVars: [], openapiSpecs: [], database: undefined, frameworks: [] });
     const spec = planHeuristic(profile, { goal: "", targets: ["typescript"] });
-    expect(spec.tools.map((t) => t.name)).toEqual(["read_file", "list_files", "search_code"]);
+    // No API: the default goal is working on the code, so writes are in (gated) and a static check verifies them.
+    expect(spec.tools.map((t) => t.name)).toEqual(["run_typecheck", "read_file", "list_files", "search_code", "write_file"]);
+    expect(spec.tools.find((t) => t.name === "write_file")).toMatchObject({ destructive: true, requiresApproval: true });
+    expect(spec.systemPrompt).not.toMatch(/through its API|base URL/);
+    expect(spec.systemPrompt).toContain("run_typecheck");
     expect(spec.subagents).toEqual([]);
     expect(validateSpec(spec).ok).toBe(true);
   });
@@ -230,7 +235,10 @@ describe("heuristic naming and goal gating (QA regressions)", () => {
       ["POST", "/api/v1/admin/purge", "purge"],
       ["GET", "/api/search", "search"],
       ["GET", "/api/session", "get_session"],
-      ["GET", "/health", "get_health"],
+      ["GET", "/health", "check_health"],
+      ["GET", "/users/me", "get_current_user"],
+      ["GET", "/user", "get_current_user"],
+      ["PATCH", "/users/me/password", "update_current_user_password"],
       ["PUT", "/tags", "update_tags"],
     ];
     for (const [m, p, want] of cases) expect(restToolName(m, p), `${m} ${p}`).toBe(want);

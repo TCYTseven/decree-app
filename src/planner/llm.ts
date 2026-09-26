@@ -14,6 +14,7 @@ import { groundDraft, looksLikeDraft, validateOrMerge, type GroundingContext } f
 import { planHeuristicDetailed, type HeuristicPlan } from "./heuristic.js";
 import { ARCHITECT_SYSTEM, CRITIC_SCHEMA, CRITIC_SYSTEM, DRAFT_SCHEMA } from "./prompts.js";
 import { isPlainObject } from "./util.js";
+import { scoreHarness } from "./quality.js";
 
 export interface LLMPlanOptions {
   goal: string;
@@ -172,6 +173,7 @@ Design the harness for this goal and return the complete specification.`;
   // --- Critic --------------------------------------------------------------
   if (opts.critique !== false) {
     progress("Critiquing design");
+    const review = automatedReview(validateOrMerge(assembleSpec(grounded.spec, base, { ...meta(opts, profile), notes: [] }), base).spec, profile);
     const criticPrompt = `<project_digest>
 ${digest}
 </project_digest>
@@ -198,6 +200,15 @@ ${
 An automated check already adjusted the draft:
 ${grounded.notes.map((n) => `- ${n}`).join("\n")}
 </grounding_report>
+`
+    : ""
+}${
+  review
+    ? `
+<automated_review>
+Deterministic rubric checks on the draft:
+${review}
+</automated_review>
 `
     : ""
 }
@@ -246,6 +257,11 @@ Review the draft against the rubric and return your scores, the changes you made
   const assembled = assembleSpec(chosen.spec, base, { ...meta(opts, profile), notes });
   const result = validateOrMerge(assembled, base);
   const spec = result.spec;
+  const quality = scoreHarness(spec, profile);
+  spec.provenance = {
+    ...spec.provenance,
+    notes: [...(spec.provenance.notes ?? []), `Offline quality score: ${quality.score}/100${quality.findings.length ? ` (${quality.findings.filter((f) => f.severity !== "info").length} findings; run \`decree-harness doctor\` for details)` : ""}.`],
+  };
   if (result.merged) {
     spec.provenance = {
       ...spec.provenance,
@@ -257,6 +273,17 @@ Review the draft against the rubric and return your scores, the changes you made
     };
   }
   return spec;
+}
+
+/** Score + errors/warnings from the offline scorer, as bullet lines for the critic (empty when clean). */
+export function automatedReview(spec: HarnessSpec, profile: ProjectProfile, max = 25): string {
+  const r = scoreHarness(spec, profile);
+  const lines = r.findings
+    .filter((f) => f.severity !== "info")
+    .slice(0, max)
+    .map((f) => `- [${f.category}] ${f.target ? `${f.target}: ` : ""}${f.message}`);
+  if (!lines.length) return "";
+  return `Score ${r.score}/100.\n${lines.join("\n")}`;
 }
 
 function meta(opts: LLMPlanOptions, profile: ProjectProfile) {

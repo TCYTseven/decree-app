@@ -86,7 +86,7 @@ describe("offline pipeline on fixtures", () => {
     expect(tool(spec, "cancel_order")).toMatchObject({ destructive: true, requiresApproval: true, readOnly: false });
     expect(tool(spec, "delete_order")).toMatchObject({ destructive: true, requiresApproval: true });
     // Code-detected route without operationId gets a REST name and a sensible description.
-    expect(tool(spec, "list_order_events").description).toMatch(/list the events of a specific order/);
+    expect(tool(spec, "list_order_events").description).toMatch(/^Lists the events of an order \(GET \/orders\/\{id\}\/events\)/);
     expect(tool(spec, "create_order").description).toContain("create an order");
     expect(tool(spec, "run_tests").shell!.command).toBe("npm run test -- {{filter}}");
     // "look up customer orders" is not a research goal.
@@ -95,7 +95,7 @@ describe("offline pipeline on fixtures", () => {
     expect(spec.tools.some((t) => /^run_(deploy|db_migrate|db_seed)$/.test(t.name))).toBe(false);
     expect(spec.provenance.notes!.some((n) => /not about operating the system/.test(n))).toBe(true);
     expect(spec.evals.find((e) => e.id === "code-grounding")!.input).toContain("order logic");
-    expect(spec.evals.find((e) => e.id === "confirm-before-delete-order")!.input).toBe("Please delete order 123.");
+    expect(spec.evals.find((e) => e.id === "confirm-before-delete-order")!.input).toBe("Delete order 42, it was posted by mistake.");
   });
 
   it("express-openapi with an ops goal keeps deploy/migrate/seed behind approval", async () => {
@@ -112,7 +112,7 @@ describe("offline pipeline on fixtures", () => {
     expect(tool(spec, "run_migrate").shell!.command).toBe("uv run alembic upgrade head");
     expect(tool(spec, "reindex").description).toMatch(/only when the user asks for this operation/);
     expect(tool(spec, "reindex").description).not.toMatch(/create or submit/);
-    expect(tool(spec, "get_item").inputSchema.properties!.item_id!.description).toBe("ID of the item");
+    expect(tool(spec, "get_item").inputSchema.properties!.item_id!.description).toBe("ID of the item, e.g. 42");
     expect(byPath.get("README.md")).toContain("uv run inventory-api-agent --root ../..");
   });
 
@@ -120,12 +120,12 @@ describe("offline pipeline on fixtures", () => {
     const { spec, byPath } = await pipeline("nextjs-app", OPS_GOAL);
     commonChecks(spec, byPath);
     const http = spec.tools.filter((t) => t.kind === "http").map((t) => t.name);
-    expect(http).toEqual(expect.arrayContaining(["list_notes", "create_note", "get_note", "update_note", "delete_note", "search", "get_session"]));
+    expect(http).toEqual(expect.arrayContaining(["list_notes", "create_note", "get_note", "update_note", "delete_note", "search_notes", "get_session"]));
     expect(spec.tools.some((t) => /webhook/.test(t.http?.path ?? ""))).toBe(false);
     expect(spec.provenance.notes!.some((n) => /webhook receiver/.test(n))).toBe(true);
     expect(tool(spec, "run_tests").shell!.command).toBe("pnpm run test {{filter}}");
     expect(tool(spec, "run_db_push")).toMatchObject({ destructive: true, requiresApproval: true });
-    expect(tool(spec, "search").description).toMatch(/Use it to search \(with `q`\)/);
+    expect(tool(spec, "search_notes").description).toMatch(/Use it to search \(with `q`\)/);
   });
 
   it("go-gin: make targets, port 8080, no fake filter param, `run` treated as a server", async () => {

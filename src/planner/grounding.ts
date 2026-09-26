@@ -4,8 +4,8 @@
  */
 import type { HarnessSpec, JSONSchema, ProjectProfile, SubagentSpec, ToolKind, ToolSpec } from "../core/types.js";
 import { DEFAULT_BLOCKED_COMMANDS, validateSpec } from "../core/spec.js";
-import type { HttpDefaults } from "./heuristic.js";
-import { isPlainObject, findEndpoint, pathParams, snake, TOOL_NAME_RE, uniq, uniqueName } from "./util.js";
+import { analyzeEndpoint, type HttpDefaults } from "./heuristic.js";
+import { cleanRoutePath, isPlainObject, findEndpoint, pathParams, snake, TOOL_NAME_RE, uniq, uniqueName } from "./util.js";
 
 const KINDS = new Set<ToolKind>(["http", "shell", "read_file", "write_file", "list_files", "search", "web_search", "web_fetch", "memory"]);
 const SERVER_KINDS = new Set<ToolKind>(["web_search", "web_fetch", "memory"]);
@@ -128,7 +128,7 @@ function groundTool(raw: unknown, idx: number, ctx: GroundingContext, notes: str
     }
     if (endpoint) {
       // Use the project's own placeholder names when the model's differ only in naming.
-      const canonical = endpoint.path.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, "{$1}");
+      const canonical = cleanRoutePath(endpoint.path);
       if (pathParams(canonical).every((p) => isPlainObject(schema.properties) && p in (schema.properties as object)) || pathParams(path).length === 0) {
         path = canonical;
       }
@@ -166,7 +166,8 @@ function groundTool(raw: unknown, idx: number, ctx: GroundingContext, notes: str
       tool.readOnly = false;
       notes.push(`"${name}": ${method} requests are not read-only; cleared readOnly.`);
     }
-    if (method === "DELETE" && !tool.destructive) {
+    // Un-favorite / un-follow style DELETEs are reversible with their POST twin; everything else is destructive.
+    if (method === "DELETE" && !tool.destructive && analyzeEndpoint(method, path).op !== "toggle-off") {
       tool.destructive = true;
       notes.push(`"${name}": DELETE endpoints are treated as destructive.`);
     }

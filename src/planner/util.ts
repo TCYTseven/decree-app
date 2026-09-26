@@ -3,6 +3,22 @@ import type { ApiEndpoint, JSONSchema, ProjectProfile } from "../core/types.js";
 
 export const TOOL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
+/** Leading verbs that make a tool name read as verb_noun (shared by the planner and the quality scorer). */
+export const TOOL_VERBS: ReadonlySet<string> = new Set(
+  (
+    "get list create update delete remove search find fetch read write run check format fix add cancel refund send submit login logout " +
+    "register signup favorite unfavorite follow unfollow approve reject publish unpublish deploy reset recover test upload download export import sync " +
+    "trigger start stop restart archive unarchive restore validate verify preview render generate build lint compile query count describe show " +
+    "assign unassign merge close open reopen lock unlock enable disable invite accept decline revoke rotate subscribe unsubscribe like unlike " +
+    "star unstar pin unpin mark move copy rename tag untag attach detach clone ping set replace upsert patch apply rollback migrate seed " +
+    "schedule complete resolve transfer charge capture void pay confirm retry estimate calculate convert translate summarize analyze explain " +
+    "inspect view watch unwatch bookmark unbookmark block unblock mute unmute vote upvote downvote report flag notify email message reply " +
+    "comment share join leave ban unban suspend activate deactivate authenticate authorize refresh upgrade downgrade install uninstall provision " +
+    "scale execute invoke call post put delegate web memory lookup diff compare review typecheck bump release tail stream save load " +
+    "print parse encode decode sign unsign hash dump sort filter map evaluate benchmark profile measure clean prune purge wipe drop reindex"
+  ).split(/\s+/),
+);
+
 export function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -42,10 +58,44 @@ export function article(word: string): string {
   return /^[aeio]|^u(?!ni|se|sa|su)/i.test(word.trim()) ? "an" : "a";
 }
 
-/** Env-var prefix for the project, e.g. "acme-orders" -> "ACME_ORDERS". */
+/** Words that pad repository names without identifying the project ("-example-app", "-template"). */
+const GENERIC_NAME_WORDS = new Set(["example", "examples", "app", "application", "template", "starter", "boilerplate", "demo", "sample", "project", "repo", "kit", "skeleton", "scaffold"]);
+
+/**
+ * The identifying words of a project name: "node-express-realworld-example-app" -> ["node", "express", "realworld"].
+ * Generic trailing words are dropped and the result is capped at three words.
+ */
+export function coreNameWords(name: string): string[] {
+  const all = kebab(name).split("-").filter(Boolean);
+  let ws = [...all];
+  while (ws.length > 1 && GENERIC_NAME_WORDS.has(ws[ws.length - 1]!)) ws.pop();
+  ws = ws.filter((w, i) => i === 0 || !GENERIC_NAME_WORDS.has(w));
+  return (ws.length ? ws : all).slice(0, 3);
+}
+
+/** Env-var prefix for the project, e.g. "acme-orders" -> "ACME_ORDERS", "node-express-realworld-example-app" -> "NODE_EXPRESS_REALWORLD". */
 export function envPrefix(profile: ProjectProfile): string {
-  const p = snake(kebab(profile.name)).toUpperCase();
+  const p = snake(coreNameWords(profile.name).join("-")).toUpperCase();
   return /^[A-Z]/.test(p) ? p : `APP_${p}`;
+}
+
+/**
+ * Route paths as a client calls them: Django/regex routes lose their anchors and optional-slash
+ * markers (`/^api/^articles/feed/?$` -> `/api/articles/feed/`), `:id` / `<int:id>` become `{id}`.
+ */
+export function cleanRoutePath(path: string): string {
+  let p = path.trim();
+  if (!/[\^$?]|\(\?P?</.test(p)) return p.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, "{$1}");
+  p = p
+    .replace(/\(\?P<([A-Za-z_][A-Za-z0-9_]*)>[^)]*\)/g, "{$1}")
+    .replace(/<(?:[^:>]+:)?([A-Za-z_][A-Za-z0-9_]*)>/g, "{$1}")
+    .replace(/\^/g, "")
+    .replace(/\$$/g, "")
+    .replace(/\/\?(?=\/|$)/g, "/")
+    .replace(/\?$/g, "")
+    .replace(/\/{2,}/g, "/")
+    .replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, "{$1}");
+  return p.startsWith("/") ? p : "/" + p;
 }
 
 /** Truncate a tool name to 64 chars and make it unique against `taken`. */
@@ -67,7 +117,7 @@ export function uniqueName(base: string, taken: Set<string>): string {
 
 /** Normalize an API path for comparison: `:id` -> `{id}`, param names erased, trailing slash removed. */
 export function normalizePath(path: string): string {
-  let p = path.trim().split("?")[0]!;
+  let p = cleanRoutePath(path).split("?")[0]!;
   p = p.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, "{$1}").replace(/<(?:[^:>]+:)?([^>]+)>/g, "{$1}");
   p = p.replace(/\{[^}]*\}/g, "{}");
   if (p.length > 1) p = p.replace(/\/+$/, "");
