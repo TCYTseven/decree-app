@@ -1,0 +1,9 @@
+Usage: decree-harness doctor [options]
+
+check your environment, API key, decree.json and generated code
+
+Options:
+  --online         also check that api.anthropic.com is reachable
+  -o, --out <dir>  output directory (default: "agent")
+  --json           print results as JSON
+  -h, --help       show help

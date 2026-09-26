@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ · decree docs</title>
+<meta name="description" content="decree-harness FAQ: API key, cost drivers, offline mode, models, data handling.">
+<meta property="og:title" content="FAQ · decree docs">
+<meta property="og:description" content="decree-harness FAQ: API key, cost drivers, offline mode, models, data handling.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#faf9f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0f0d" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("decree-theme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t);}catch(e){}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Instrument+Serif:ital@0;1&amp;display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div id="live" class="sr-only" aria-live="polite"></div>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="../index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><circle cx="16" cy="16" r="10.5" fill="none" stroke="var(--accent-fg)" stroke-width="1.5" stroke-dasharray="2.2 2.2"/><path d="M11.5 16.4l3.1 3.1 6-6.6" fill="none" stroke="var(--accent-fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>decree</span><span class="brand-tag">v0.1.0</span></a>
+    <nav class="nav" aria-label="Primary">
+      <a href="../docs/index.html" aria-current="page">Docs</a>
+      <a href="../docs/commands.html" class="nav-hide-sm">Commands</a>
+      <a href="../docs/config.html" class="nav-hide-sm">decree.json</a>
+      <a class="icon-btn gh-link" href="https://github.com/TCYTseven/decree-app"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85 0 1.7.12 2.5.34 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.24 10.24 0 0 0 22 12.23C22 6.58 17.52 2 12 2z"/></svg><span class="gh-label">GitHub</span><span class="sr-only"> (decree-app repository)</span></a>
+      <button type="button" class="icon-btn theme-toggle" data-theme-toggle aria-label="Toggle color theme"><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg></button>
+    </nav>
+  </div>
+</header>
+<div class="docs-shell">
+  <nav class="docs-side" aria-label="Documentation">
+    <button type="button" class="docs-menu-btn" aria-expanded="false" aria-controls="docs-nav-lists">Docs menu: FAQ <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="docs-nav-lists" id="docs-nav-lists"><h2>Get started</h2><ul><li><a href="index.html">Quickstart</a></li></ul><h2>Reference</h2><ul><li><a href="commands.html">Commands</a></li><li><a href="config.html">decree.json</a></li><li><a href="targets.html">Targets</a></li></ul><h2>Concepts</h2><ul><li><a href="safety.html">Safety model</a></li><li><a href="faq.html" aria-current="page">FAQ</a></li></ul></div>
+  </nav>
+  <main id="main" class="docs-main">
+    <article class="prose">
+      <p class="crumb">Concepts</p>
+      <h1>FAQ</h1>
+      <p class="lead">API keys, cost, offline mode, models, and what happens to your code.</p>
+      <div class="faq"><details open id="key"><summary>Do I need an Anthropic API key?</summary><div class="a"><p>Not to try it. <code>--offline</code> uses a heuristic planner that builds the same kind of spec from the scan alone, and <code>scan</code>, <code>generate</code>, <code>tools</code>, <code>schema</code> and <code>doctor</code> never call the API. The demo on the home page ran offline.</p>
+<p>You need a key for a Claude-designed plan, and for <code>refine</code>, <code>chat</code>, <code>run</code> and <code>eval</code>. decree reads <code>ANTHROPIC_API_KEY</code>, then a <code>.env</code> file, or <code>--api-key</code>. With a key set, <code>decree-harness init --force</code> re-plans an offline spec with Claude.</p></div></details>
+<details open id="cost"><summary>What drives the cost?</summary><div class="a"><ul>
+<li><strong>Planning.</strong> <code>init</code> and <code>plan</code> make an architect call and a critic call on the planner model (default <code>claude-opus-5</code>, $5 input and $25 output per million tokens). <code>--no-critique</code> skips the critic. After planning, decree prints the tokens used and the estimated cost.</li>
+<li><strong>Refining.</strong> Each <code>refine</code> is one more planning call.</li>
+<li><strong>Running the agent.</strong> <code>chat</code>, <code>run</code> and the generated agents bill per turn on <code>model.id</code>. Subagents default to <code>claude-sonnet-5</code> ($2 and $10). Prompt caching is on by default, and cache reads cost 0.1x the input price.</li>
+<li><strong>Evals.</strong> <code>eval</code> runs the agent once per case, plus a judge call for cases that have a rubric.</li>
+</ul>
+<p><code>guardrails.maxCostUsd</code> stops any run once its estimated cost passes the cap. In chat, <code>/cost</code> shows the spend so far.</p></div></details>
+<details open id="offline"><summary>What does offline mode do differently?</summary><div class="a"><p>The offline planner derives tools, the system prompt, subagents, guardrails and evals from the scan with fixed rules instead of asking Claude. The spec has the same shape and passes through the same grounding and validation, and <code>provenance.generator</code> is set to <code>heuristic</code> so you can tell them apart.</p>
+<p>A Claude plan adds an architect and a critic: better tool descriptions, a prompt written for your goal, and evals chosen for your project. You can start offline and re-plan later.</p></div></details>
+<details open id="models"><summary>Which models does it use?</summary><div class="a"><p>Claude only: the planner and the generated agents use the Anthropic API. Defaults are <code>claude-opus-5</code> with adaptive thinking for the planner and the agent, and <code>claude-sonnet-5</code> for subagents. Change them with <code>--model</code> or in <code>decree.json</code> (<code>model.id</code>, <code>model.subagentId</code>, <code>model.effort</code>, <code>model.thinking</code>, and per-subagent <code>model</code>).</p></div></details>
+<details open id="edits"><summary>Will regenerating overwrite my changes?</summary><div class="a"><p>No. decree records a hash of every file it writes in <code>.decree/manifest.json</code>. If you edited a generated file, <code>generate</code> leaves it alone and tells you, unless you pass <code>--force</code>. The intended loop is to change <code>decree.json</code> and regenerate.</p></div></details>
+<details open id="data"><summary>What leaves my machine?</summary><div class="a"><p>Scanning is local. Offline mode sends nothing. With Claude planning, the scan profile (file list, endpoints, scripts, env var names, excerpts of key files and your README) goes to the Anthropic API. Hardcoded secrets in those excerpts are masked with <code>[REDACTED]</code> first. For env vars, the scanner keeps names and non-secret example values (for example from <code>.env.example</code>); values of secret-looking variables are left out.</p></div></details>
+<details open id="stacks"><summary>What stacks does the scanner understand?</summary><div class="a"><p>Scripts from package.json, Makefile, pyproject, justfile and Taskfile; OpenAPI and Swagger specs; routes in Express, Fastify, Hono, NestJS, Next.js, FastAPI, Flask, Django, Gin, Echo, Chi, Rails and more; env var names; database models; the README; and existing agent config.</p></div></details>
+<details open id="api"><summary>Can I call it from code?</summary><div class="a"><p>Yes. The package exports the same building blocks the CLI uses:</p><div class="code"><div class="code-head"><span>example.ts</span><button type="button" class="copy-btn" aria-label="Copy example.ts"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div><pre><code>import { scanProject, planHarness, generateTargets, runAgent, createLLM } from "decree-harness";
+
+const profile = await scanProject(process.cwd());
+const spec = await planHarness(profile, { goal: "Triage failing tests", targets: ["typescript"], llm: createLLM() });
+const files = generateTargets(spec, spec.targets, { outDir: "agent", decreeVersion: "0.1.0" });</code></pre></div></div></details></div>
+    </article>
+    <nav class="pager" aria-label="Previous and next page"><a class="prev" href="safety.html"><span>Previous</span><strong>Safety model</strong></a></nav>
+  </main>
+  
+</div>
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div>
+      <a class="brand" href="../index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><circle cx="16" cy="16" r="10.5" fill="none" stroke="var(--accent-fg)" stroke-width="1.5" stroke-dasharray="2.2 2.2"/><path d="M11.5 16.4l3.1 3.1 6-6.6" fill="none" stroke="var(--accent-fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>decree</span></a>
+      <p>Open source under the MIT license. Built for Claude on the Anthropic API.</p>
+    </div>
+    <nav aria-label="Footer">
+      <ul class="footer-links">
+        <li><a href="../docs/index.html">Quickstart</a></li>
+        <li><a href="../docs/commands.html">Commands</a></li>
+        <li><a href="../docs/config.html">decree.json</a></li>
+        <li><a href="../docs/targets.html">Targets</a></li>
+        <li><a href="../docs/safety.html">Safety</a></li>
+        <li><a href="../docs/faq.html">FAQ</a></li>
+        <li><a href="https://github.com/TCYTseven/decree-app">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</footer>
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

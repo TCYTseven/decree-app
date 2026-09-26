@@ -1,0 +1,110 @@
+T   decree  v0.1.0 · agent harness generator
+|
+o  Project acme-orders /tmp/claude-0/-home-user-decree-app/e7dd7e69-fc80-59e1-8873-bd84df15989f/scratchpad/site/demo/acme-orders
+|
+*  Scanned acme-orders · 16 files 86ms
+|
+o  acme-orders ----------------------------------------+
+|                                                      |
+|  Stack         TypeScript · npm                      |
+|  Frameworks    express                               |
+|  Endpoints     9 (OpenAPI: openapi.yaml)             |
+|  Scripts       8 (dev, build, start, test, lint, …)  |
+|  Env vars      6 (2 secret)                          |
+|  Database      prisma (3 models)                     |
+|  Agent config  none                                  |
+|  Files         16 scanned in 86ms                    |
+|                                                      |
++------------------------------------------------------+
+|
+•  Goal › Operate the orders API and triage test failures
+|
+*  Planned Acme Orders Agent · 18 tools · 2 subagents · 9 evals 30ms
+|
+|  Acme Orders Agent (acme-orders-agent)
+|  Acme Orders Agent for acme-orders (Acme orders service: REST API for orders and customers): Operate the orders API and triage test failures.
+|
+|  ┌───────────────────┬────────────┬─────────────┬─────────────────────────────┐
+|  │ Tool              │ Kind       │ Safety      │ Binds to                    │
+|  ├───────────────────┼────────────┼─────────────┼─────────────────────────────┤
+|  │ get_health        │ http       │ ● read-only │ GET /health                 │
+|  │ list_orders       │ http       │ ● read-only │ GET /orders                 │
+|  │ create_order      │ http       │ • writes    │ POST /orders                │
+|  │ get_order         │ http       │ ● read-only │ GET /orders/{id}            │
+|  │ delete_order      │ http       │ ▲ approval  │ DELETE /orders/{id}         │
+|  │ cancel_order      │ http       │ ▲ approval  │ POST /orders/{id}/cancel    │
+|  │ list_customers    │ http       │ ● read-only │ GET /customers              │
+|  │ get_customer      │ http       │ ● read-only │ GET /customers/{customerId} │
+|  │ list_order_events │ http       │ ● read-only │ GET /orders/{id}/events     │
+|  │ run_tests         │ shell      │ • writes    │ npm run test -- {{filter}}  │
+|  │ run_lint          │ shell      │ • writes    │ npm run lint                │
+|  │ run_build         │ shell      │ • writes    │ npm run build               │
+|  │ run_deploy        │ shell      │ ▲ approval  │ npm run deploy              │
+|  │ run_db_migrate    │ shell      │ ▲ approval  │ npm run db:migrate          │
+|  │ run_db_seed       │ shell      │ ▲ approval  │ npm run db:seed             │
+|  │ read_file         │ read_file  │ ● read-only │ .                           │
+|  │ list_files        │ list_files │ ● read-only │ .                           │
+|  │ search_code       │ search     │ ● read-only │ .                           │
+|  └───────────────────┴────────────┴─────────────┴─────────────────────────────┘
+|
+|  Subagents
+|    api-investigator · 6 tools · claude-sonnet-5
+|      Delegate questions that need several read-only calls to the acme-orders API (gathering and …
+|    code-investigator · 3 tools · claude-sonnet-5
+|      Delegate broad codebase questions that need reading many files (how a feature works end to …
+|
+|  Model claude-opus-5 (effort high, adaptive thinking)   Evals 9   Approval destructive (5 gated)
+|
+*  Wrote decree.json · edit it any time, then run npx decree-harness generate
+|
+o  Wrote agent/  66 created
+|
+|  agent/
+|  ├── claude-code/
+|  │   ├── .claude/ · 10 created
+|  │   ├── .mcp.json created
+|  │   ├── CLAUDE.md created
+|  │   └── README.md created
+|  ├── mcp-server/
+|  │   ├── src/ · 4 created
+|  │   ├── .env.example created
+|  │   ├── .gitignore created
+|  │   ├── package.json created
+|  │   ├── README.md created
+|  │   └── tsconfig.json created
+|  ├── python/
+|  │   ├── acme_orders_agent/ · 15 created
+|  │   ├── tests/
+|  │   │   └── test_tools.py created
+|  │   ├── .env.example created
+|  │   ├── pyproject.toml created
+|  │   └── README.md created
+|  ├── typescript/
+|  │   ├── src/ · 15 created
+|  │   ├── .env.example created
+|  │   ├── .gitignore created
+|  │   ├── package.json created
+|  │   ├── README.md created
+|  │   └── tsconfig.json created
+|  ├── .decree-generated created
+|  ├── .env.example created
+|  ├── evals.json created
+|  ├── harness.md created
+|  └── README.md created
+|
+o  Next steps -----------------------------------------------------------------+
+|                                                                              |
+|  cd /tmp/claude-0/-home-user-decree-app/e7dd7e69-fc80-59e1-8873-bd84df15989  |
+|  f/scratchpad/site/demo/acme-orders                                          |
+|  npx decree-harness chat                    talk to your agent right now     |
+|  cd agent/typescript && npm i && npm start  run the generated agent          |
+|  npx decree-harness eval                    run the 9 evals                  |
+|  npx decree-harness refine "…"              change the design in plain       |
+|  English                                                                     |
+|  Tip: set ANTHROPIC_API_KEY and run `decree-harness init --force` for a      |
+|  Claude-designed harness.                                                    |
+|                                                                              |
++------------------------------------------------------------------------------+
+|
+—  Your harness is ready in 0.2s
+

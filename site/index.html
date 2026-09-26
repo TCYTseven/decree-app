@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>decree: generate an agent harness for your codebase</title>
+<meta name="description" content="decree-harness scans your repo and writes a system prompt, tools bound to your real endpoints and scripts, subagents, guardrails and evals as runnable TypeScript, Python, an MCP server and Claude Code config.">
+<meta property="og:title" content="decree: generate an agent harness for your codebase">
+<meta property="og:description" content="decree-harness scans your repo and writes a system prompt, tools bound to your real endpoints and scripts, subagents, guardrails and evals as runnable TypeScript, Python, an MCP server and Claude Code config.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#faf9f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f0f0d" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>(function(){var d=document.documentElement;d.classList.add("js");try{var t=localStorage.getItem("decree-theme");if(t==="light"||t==="dark")d.setAttribute("data-theme",t);}catch(e){}})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Instrument+Serif:ital@0;1&amp;display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div id="live" class="sr-only" aria-live="polite"></div>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><circle cx="16" cy="16" r="10.5" fill="none" stroke="var(--accent-fg)" stroke-width="1.5" stroke-dasharray="2.2 2.2"/><path d="M11.5 16.4l3.1 3.1 6-6.6" fill="none" stroke="var(--accent-fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>decree</span><span class="brand-tag">v0.1.0</span></a>
+    <nav class="nav" aria-label="Primary">
+      <a href="docs/index.html">Docs</a>
+      <a href="docs/commands.html" class="nav-hide-sm">Commands</a>
+      <a href="docs/config.html" class="nav-hide-sm">decree.json</a>
+      <a class="icon-btn gh-link" href="https://github.com/TCYTseven/decree-app"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85 0 1.7.12 2.5.34 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.24 10.24 0 0 0 22 12.23C22 6.58 17.52 2 12 2z"/></svg><span class="gh-label">GitHub</span><span class="sr-only"> (decree-app repository)</span></a>
+      <button type="button" class="icon-btn theme-toggle" data-theme-toggle aria-label="Toggle color theme"><svg class="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg><svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/></svg></button>
+    </nav>
+  </div>
+</header>
+<main id="main">
+<section class="hero" aria-labelledby="hero-title">
+  <div class="container hero-grid">
+    <div>
+      <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Open source CLI · MIT · v0.1.0</p>
+      <h1 id="hero-title" class="display">An agent harness for your codebase, in <em>one command</em>.</h1>
+      <p class="lede">decree scans your repo, then writes a system prompt, tools bound to the endpoints and scripts that actually exist, subagents, guardrails and evals. You get runnable TypeScript, Python, an MCP server and Claude Code config, all generated from one file you can edit.</p>
+      <div class="hero-actions">
+        <div class="cmd"><span class="prompt" aria-hidden="true">$</span><code>npx decree-harness</code><button type="button" class="copy-btn" data-copy="npx decree-harness" aria-label="Copy command: npx decree-harness"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div>
+        <div class="hero-links">
+          <a class="btn btn-primary" href="docs/index.html">Read the quickstart <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <a class="btn btn-ghost" href="https://github.com/TCYTseven/decree-app"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.58 2 12.23c0 4.52 2.87 8.35 6.84 9.7.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.56 2.35 1.11 2.92.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.3 9.3 0 0 1 12 6.84c.85 0 1.7.12 2.5.34 1.9-1.33 2.74-1.05 2.74-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.8-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.24 10.24 0 0 0 22 12.23C22 6.58 17.52 2 12 2z"/></svg> View on GitHub</a>
+        </div>
+        <p class="hero-note">No API key yet? Add <code>--offline</code> for the heuristic planner.</p>
+      </div>
+      <ul class="facts" aria-label="At a glance">
+        <li>Scans locally, no network</li>
+        <li>Claude designs and critiques the plan</li>
+        <li>Destructive tools always ask first</li>
+        <li>Regenerate any time from decree.json</li>
+      </ul>
+    </div>
+    <figure class="term-fig" style="margin:0">
+  <div class="terminal" data-term>
+    <div class="term-bar">
+      <div class="term-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="term-tabs" role="tablist" aria-label="Example commands"><button type="button" role="tab" id="term-init-tab" aria-controls="term-init" aria-selected="true" tabindex="0" class="term-tab">init</button><button type="button" role="tab" id="term-tools-tab" aria-controls="term-tools" aria-selected="false" tabindex="-1" class="term-tab">tools</button><button type="button" role="tab" id="term-doctor-tab" aria-controls="term-doctor" aria-selected="false" tabindex="-1" class="term-tab">doctor</button></div>
+      <button type="button" class="term-replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Replay</button>
+    </div>
+    <div class="term-body" tabindex="0" role="region" aria-label="Terminal output"><pre id="term-init" role="tabpanel" aria-labelledby="term-init-tab"><span class="ln"><span class="t-g">❯</span> <span class="t-cmd" data-type>npx decree-harness init --yes --offline --targets all</span>
+</span><span class="ln"><span class="t-r">T</span>   <span class="t-bold">decree</span>  <span class="t-dim">v0.1.0 · agent harness generator</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln"><span class="t-g">o</span>  Project acme-orders
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="420"><span class="t-g">*</span>  Scanned acme-orders · 16 files <span class="t-dim">86ms</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln"><span class="t-g">o</span>  acme-orders <span class="t-dim">----------------------------------------</span><span class="t-dim">+</span>
+</span><span class="ln"><span class="t-dim">|</span>                                                      |
+</span><span class="ln" data-pause="60"><span class="t-dim">|</span>  Stack         TypeScript · npm                      |
+</span><span class="ln"><span class="t-dim">|</span>  Frameworks    express                               |
+</span><span class="ln"><span class="t-dim">|</span>  Endpoints     9 (OpenAPI: openapi.yaml)             |
+</span><span class="ln"><span class="t-dim">|</span>  Scripts       8 (dev, build, start, test, lint, …)  |
+</span><span class="ln"><span class="t-dim">|</span>  Env vars      6 (2 secret)                          |
+</span><span class="ln"><span class="t-dim">|</span>  Database      prisma (3 models)                     |
+</span><span class="ln"><span class="t-dim">|</span>  Agent config  none                                  |
+</span><span class="ln"><span class="t-dim">|</span>  Files         16 scanned in 86ms                    |
+</span><span class="ln"><span class="t-dim">|</span>                                                      |
+</span><span class="ln"><span class="t-dim">+</span><span class="t-dim">------------------------------------------------------</span><span class="t-dim">+</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="300"><span class="t-b">•</span>  Goal <span class="t-dim">›</span> Operate the orders API and triage test failures
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="650"><span class="t-g">*</span>  Planned Acme Orders Agent · 18 tools · 2 subagents · 9 evals <span class="t-dim">30ms</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln"><span class="t-dim">|</span>  Acme Orders Agent (acme-orders-agent)
+</span><span class="ln"><span class="t-dim">|</span>  Acme Orders Agent for acme-orders (Acme orders service: REST API for orders and customers): Operate the orders API and triage test failures.
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">┌───────────────────┬────────────┬─────────────┬─────────────────────────────┐</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> Tool              <span class="t-dim">│</span> Kind       <span class="t-dim">│</span> Safety      <span class="t-dim">│</span> Binds to                    <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├───────────────────┼────────────┼─────────────┼─────────────────────────────┤</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> get_health        <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /health                 <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> list_orders       <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /orders                 <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> create_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-b">• writes</span>    <span class="t-dim">│</span> <span class="t-c">POST</span> /orders                <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> get_order         <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}            <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> delete_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> <span class="t-c">DELETE</span> /orders/{id}         <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> cancel_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> <span class="t-c">POST</span> /orders/{id}/cancel    <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> list_customers    <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /customers              <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> get_customer      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /customers/{customerId} <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> list_order_events <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}/events     <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_tests         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>    <span class="t-dim">│</span> npm run test -- {{filter}}  <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_lint          <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>    <span class="t-dim">│</span> npm run lint                <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_build         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>    <span class="t-dim">│</span> npm run build               <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_deploy        <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> npm run deploy              <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_db_migrate    <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> npm run db:migrate          <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_db_seed       <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> npm run db:seed             <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> read_file         <span class="t-dim">│</span> read_file  <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> list_files        <span class="t-dim">│</span> list_files <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> search_code       <span class="t-dim">│</span> search     <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">└───────────────────┴────────────┴─────────────┴─────────────────────────────┘</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln"><span class="t-dim">|</span>  Subagents
+</span><span class="ln"><span class="t-dim">|</span>    api-investigator · 6 tools · claude-sonnet-5
+</span><span class="ln"><span class="t-dim">|</span>      Delegate questions that need several read-only calls to the acme-orders API (gathering and …
+</span><span class="ln"><span class="t-dim">|</span>    code-investigator · 3 tools · claude-sonnet-5
+</span><span class="ln"><span class="t-dim">|</span>      Delegate broad codebase questions that need reading many files (how a feature works end to …
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln"><span class="t-dim">|</span>  Model claude-opus-5 (effort high, adaptive thinking)   Evals 9   Approval destructive (5 gated)
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="300"><span class="t-g">*</span>  Wrote decree.json · edit it any time, then run npx decree-harness generate
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="350"><span class="t-g">o</span>  Wrote agent/  66 <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln"><span class="t-dim">|</span>  agent/
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> claude-code/
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .claude/ · 10 <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .mcp.json <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> CLAUDE.md <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">└──</span> README.md <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> mcp-server/
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> src/ · 4 <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .env.example <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .gitignore <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> package.json <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> README.md <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">└──</span> tsconfig.json <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> python/
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> acme_orders_agent/ · 15 <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> tests/
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">│</span>   <span class="t-dim">└──</span> test_tools.py <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .env.example <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> pyproject.toml <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">└──</span> README.md <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> typescript/
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> src/ · 15 <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .env.example <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .gitignore <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> package.json <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> README.md <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">└──</span> tsconfig.json <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> .decree-generated <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> .env.example <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> evals.json <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> harness.md <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">└──</span> README.md <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="200"><span class="t-g">o</span>  Next steps <span class="t-dim">-----------------------------------------------------------------</span><span class="t-dim">+</span>
+</span><span class="ln"><span class="t-dim">|</span>                                                                              |
+</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness chat                    talk to your agent right now     |
+</span><span class="ln"><span class="t-dim">|</span>  cd agent/typescript &amp;&amp; npm i &amp;&amp; npm start  run the generated agent          |
+</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness eval                    run the 9 evals                  |
+</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness refine "…"              change the design in plain       |
+</span><span class="ln"><span class="t-dim">|</span>  English                                                                     |
+</span><span class="ln"><span class="t-dim">|</span>  Tip: set ANTHROPIC_API_KEY and run `decree-harness init --force` for a      |
+</span><span class="ln"><span class="t-dim">|</span>  Claude-designed harness.                                                    |
+</span><span class="ln"><span class="t-dim">|</span>                                                                              |
+</span><span class="ln"><span class="t-dim">+</span><span class="t-dim">------------------------------------------------------------------------------</span><span class="t-dim">+</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="250"><span class="t-dim">—</span>  Your harness is ready in <span class="t-dim">0.2s</span>
+</span><span class="ln"><span class="t-g">❯</span> <span class="t-caret"></span></span></pre><pre id="term-tools" role="tabpanel" aria-labelledby="term-tools-tab" hidden><span class="ln"><span class="t-g">❯</span> <span class="t-cmd" data-type>npx decree-harness tools</span>
+</span><span class="ln">Acme Orders Agent · 18 tools · approval mode: destructive
+</span><span class="ln"><span class="t-dim">┌───────────────────┬────────────┬─────────────────────┬─────────────────────┬─────────────────────┐</span>
+</span><span class="ln"><span class="t-dim">│</span> Tool              <span class="t-dim">│</span> Kind       <span class="t-dim">│</span> Flags               <span class="t-dim">│</span> Binds to            <span class="t-dim">│</span> Source              <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">├───────────────────┼────────────┼─────────────────────┼─────────────────────┼─────────────────────┤</span>
+</span><span class="ln"><span class="t-dim">│</span> get_health        <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /health         <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /health <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> list_orders       <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /orders         <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /orders <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> create_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-b">• writes</span>            <span class="t-dim">│</span> <span class="t-c">POST</span> /orders        <span class="t-dim">│</span> openapi:<span class="t-c">POST</span> /orde… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> get_order         <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}    <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /order… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> delete_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> <span class="t-c">DELETE</span> /orders/{id} <span class="t-dim">│</span> openapi:<span class="t-c">DELETE</span> /or… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> cancel_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> <span class="t-c">POST</span> /orders/{id}/… <span class="t-dim">│</span> openapi:<span class="t-c">POST</span> /orde… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> list_customers    <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /customers      <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /custo… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> get_customer      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /customers/{cu… <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /custo… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> list_order_events <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}/e… <span class="t-dim">│</span> route:<span class="t-c">GET</span> /orders/… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> run_tests         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>            <span class="t-dim">│</span> npm run test -- {{… <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> run_lint          <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>            <span class="t-dim">│</span> npm run lint        <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> run_build         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>            <span class="t-dim">│</span> npm run build       <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> run_deploy        <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> npm run deploy      <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> run_db_migrate    <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> npm run db:migrate  <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> run_db_seed       <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> npm run db:seed     <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> read_file         <span class="t-dim">│</span> read_file  <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> .                   <span class="t-dim">│</span> builtin             <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> list_files        <span class="t-dim">│</span> list_files <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> .                   <span class="t-dim">│</span> builtin             <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> search_code       <span class="t-dim">│</span> search     <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> .                   <span class="t-dim">│</span> builtin             <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">└───────────────────┴────────────┴─────────────────────┴─────────────────────┴─────────────────────┘</span>
+</span><span class="ln">
+</span><span class="ln" data-pause="150">Subagents
+</span><span class="ln">  api-investigator <span class="t-dim">›</span> get_health, list_orders, get_order, list_customers, get_customer, list_order_events
+</span><span class="ln">  code-investigator <span class="t-dim">›</span> read_file, list_files, search_code
+</span><span class="ln"><span class="t-g">❯</span> <span class="t-caret"></span></span></pre><pre id="term-doctor" role="tabpanel" aria-labelledby="term-doctor-tab" hidden><span class="ln"><span class="t-g">❯</span> <span class="t-cmd" data-type>npx decree-harness doctor</span>
+</span><span class="ln"><span class="t-r">T</span>   <span class="t-bold">decree</span>  <span class="t-dim">v0.1.0 · doctor</span>
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="250"><span class="t-dim">|</span>  <span class="t-g">✓</span> Node.js            v22.22.2
+</span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-a">▲</span> Anthropic API key  not set
+</span><span class="ln"><span class="t-dim">|</span>                       export ANTHROPIC_API_KEY=… (or add it to .env). Needed for Claude planning, chat, run and eval.
+</span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-g">✓</span> decree.json        18 tools, 2 subagents, 9 evals
+</span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-a">▲</span> Tool env vars      missing ACME_API_TOKEN
+</span><span class="ln"><span class="t-dim">|</span>                       Tools that need them will fail at runtime. Set them in your shell or .env.
+</span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-g">✓</span> Generated code     agent/ (typescript, python, mcp, claude-code)
+</span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-dim">○</span> Network            skipped (pass --online to check api.anthropic.com)
+</span><span class="ln"><span class="t-dim">|</span>
+</span><span class="ln" data-pause="250"><span class="t-dim">—</span>  OK with 2 warnings
+</span><span class="ln"><span class="t-g">❯</span> <span class="t-caret"></span></span></pre></div>
+  </div>
+  <figcaption class="term-caption">Real output from decree-harness 0.1.0 on <a href="https://github.com/TCYTseven/decree-app/tree/main/test/fixtures/express-openapi">test/fixtures/express-openapi</a>, an Express + OpenAPI orders service. Offline planner, no API key. Local paths removed.</figcaption>
+</figure>
+  </div>
+</section>
+
+<section class="section" id="how" aria-labelledby="how-title">
+  <div class="container">
+    <div class="section-head">
+      <span class="sec-num">§ 1 &nbsp;How it works</span>
+      <h2 id="how-title" class="h2">Scan, plan, generate, then run it.</h2>
+      <p>Every tool in the harness points at something real in your repo: an OpenAPI operation, a route in code, a package script, or a file. A grounding pass drops anything that does not exist.</p>
+    </div>
+    <ol class="steps">
+      <li class="step">
+        <div class="step-k"><span>01</span><span class="tagline">local</span></div>
+        <h3>Scan</h3>
+        <p>Reads your project without touching the network.</p>
+        <ul>
+          <li>OpenAPI and Swagger specs</li>
+          <li>Routes in Express, Fastify, Hono, NestJS, Next.js, FastAPI, Flask, Django, Gin, Echo, Chi, Rails</li>
+          <li>Scripts, env var names, database models, README</li>
+        </ul>
+        <div class="step-cmd">decree-harness scan</div>
+      </li>
+      <li class="step">
+        <div class="step-k"><span>02</span><span class="tagline">Claude</span></div>
+        <h3>Plan</h3>
+        <p>An architect pass designs the tools, prompt, subagents, guardrails and evals. A critic scores the draft on grounding, safety flags and eval coverage, then revises it.</p>
+        <div class="step-cmd">decree-harness plan</div>
+      </li>
+      <li class="step">
+        <div class="step-k"><span>03</span><span class="tagline">pure rendering</span></div>
+        <h3>Generate</h3>
+        <p>Renders <code>decree.json</code> into code for each target you pick. Files you edited by hand are left alone unless you pass <code>--force</code>.</p>
+        <div class="step-cmd">decree-harness generate</div>
+      </li>
+      <li class="step">
+        <div class="step-k"><span>04</span><span class="tagline">your terminal</span></div>
+        <h3>Run and eval</h3>
+        <p>Chat with the agent right away, run a one-shot prompt, or run the generated eval cases. Tools run in dry-run mode during evals by default.</p>
+        <div class="step-cmd">decree-harness chat · run · eval</div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="section section-alt" id="targets" aria-labelledby="targets-title">
+  <div class="container">
+    <div class="section-head">
+      <span class="sec-num">§ 2 &nbsp;What you get</span>
+      <h2 id="targets-title" class="h2">Four targets from the same spec.</h2>
+      <p>Pick any combination with <code>--targets typescript,python,mcp,claude-code</code> or <code>all</code>. On the orders fixture above, <code>--targets all</code> wrote 18 tools, 2 subagents and 9 evals into 66 files under <code>agent/</code>.</p>
+    </div>
+    <div class="targets">
+      <article class="target">
+        <div class="target-head"><h3>TypeScript agent</h3><span class="pill">typescript</span></div>
+        <p>A standalone agent on the Anthropic TypeScript SDK: streaming loop, tools, subagents, CLI with a REPL, and an eval runner. Plain code you can read and change.</p>
+        <div class="files" role="img" aria-label="Files: src/agent.ts, loop.ts, cli.ts, tools/http.ts, shell.ts, fs.ts, subagents.ts, evals.ts">src/agent.ts   loop.ts   cli.ts
+src/tools/http.ts   shell.ts   fs.ts
+src/subagents.ts   evals.ts</div>
+        <div class="run"><span>run</span><code>cd agent/typescript &amp;&amp; npm install &amp;&amp; npm start</code></div>
+      </article>
+      <article class="target">
+        <div class="target-head"><h3>Python agent</h3><span class="pill">python</span></div>
+        <p>The same harness on the Anthropic Python SDK, packaged with <code>pyproject.toml</code>, a console script, an eval runner and pytest tool tests. Python 3.10 or newer.</p>
+        <div class="files" role="img" aria-label="Files: acme_orders_agent/agent.py, cli.py, evals.py, tools/http.py, shell.py, fs.py, tests/test_tools.py">acme_orders_agent/agent.py   cli.py   evals.py
+acme_orders_agent/tools/http.py   shell.py   fs.py
+tests/test_tools.py</div>
+        <div class="run"><span>run</span><code>cd agent/python &amp;&amp; uv sync &amp;&amp; uv run acme-orders-agent</code></div>
+      </article>
+      <article class="target">
+        <div class="target-head"><h3>MCP server</h3><span class="pill">mcp</span></div>
+        <p>A stdio Model Context Protocol server that exposes the harness tools and prompts to any MCP client, such as Claude Code, Claude Desktop or Cursor.</p>
+        <div class="files" role="img" aria-label="Files: src/server.ts, src/tools.ts, src/harness.ts, src/config.ts">src/server.ts   tools.ts
+src/harness.ts   config.ts</div>
+        <div class="run"><span>run</span><code>cd agent/mcp-server &amp;&amp; npm install &amp;&amp; npm start</code></div>
+      </article>
+      <article class="target">
+        <div class="target-head"><h3>Claude Code config</h3><span class="pill">claude-code</span></div>
+        <p>A <code>CLAUDE.md</code>, agent and subagent files, skills, slash commands and a <code>settings.json</code> that allows read-only tools, asks before destructive ones and denies blocked commands.</p>
+        <div class="files" role="img" aria-label="Files: CLAUDE.md, .mcp.json, .claude/agents, .claude/skills, .claude/commands, .claude/settings.json">CLAUDE.md   .mcp.json
+.claude/agents/   skills/   commands/
+.claude/settings.json</div>
+        <div class="run"><span>use</span><code>cp -R agent/claude-code/CLAUDE.md agent/claude-code/.claude .</code></div>
+      </article>
+    </div>
+    <div class="shared" aria-label="Files written for every target">
+      <div><code>harness.md</code><p>Design doc: prompt, every tool, safety flags, planner notes. Review it in PRs.</p></div>
+      <div><code>evals.json</code><p>Eval cases with expected tool calls, text checks and a rubric.</p></div>
+      <div><code>.env.example</code><p>Every env var the tools read, with which ones are secret.</p></div>
+      <div><code>.decree/manifest.json</code><p>Hashes of generated files, so <code>generate</code> skips files you edited.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="safety" aria-labelledby="safety-title">
+  <div class="container split">
+    <div>
+      <div class="section-head" style="margin-bottom:28px">
+        <span class="sec-num">§ 3 &nbsp;Safety model</span>
+        <h2 id="safety-title" class="h2">The agent can read freely. Anything destructive waits for a human.</h2>
+        <p>Guardrails are enforced by the generated code, not only by the prompt. Every target implements the same rules.</p>
+      </div>
+      <ul class="flags" aria-label="Tool flags">
+        <li class="flag ro"><i aria-hidden="true"></i>readOnly</li>
+        <li class="flag wr"><i aria-hidden="true"></i>writes</li>
+        <li class="flag ap"><i aria-hidden="true"></i>destructive · requiresApproval</li>
+      </ul>
+      <div class="code"><div class="code-head"><span>approval rule, from docs/ARCHITECTURE.md</span></div><pre><code>needsApproval(tool) =
+  approvalMode == "never"       -&gt; false
+  approvalMode == "always"      -&gt; !tool.readOnly
+                                   || tool.requiresApproval
+  approvalMode == "destructive" -&gt; tool.requiresApproval
+                                   || tool.destructive</code></pre></div>
+    </div>
+    <ol class="rules">
+      <li><span class="ix">01</span><div><strong>Approval on destructive tools</strong><p>Every tool carries <code>readOnly</code>, <code>destructive</code> and <code>requiresApproval</code>. The grounding pass forces approval on destructive tools, and a declined call goes back to the model as an error.</p></div></li>
+      <li><span class="ix">02</span><div><strong>Files stay inside allowed paths</strong><p>File tools are confined to <code>guardrails.allowedPaths</code>, with a realpath check that catches symlink escapes.</p></div></li>
+      <li><span class="ix">03</span><div><strong>Shell parameters are quoted</strong><p>Parameters are substituted with POSIX single quotes, values starting with <code>-</code> are refused, and commands containing a <code>blockedCommands</code> entry never run.</p></div></li>
+      <li><span class="ix">04</span><div><strong>Secrets are redacted</strong><p>Values of env vars in <code>redactEnv</code> are replaced with <code>[REDACTED:NAME]</code> in tool output before the model sees it.</p></div></li>
+      <li><span class="ix">05</span><div><strong>Runs are capped</strong><p><code>maxTurns</code> and <code>maxCostUsd</code> stop every run. Subagents only get read-only tools, since they cannot ask you to confirm.</p></div></li>
+      <li><span class="ix">06</span><div><strong>Auth stays on your API's origin</strong><p>HTTP tools follow at most 5 redirects, and only on the same origin, so auth headers never leave your API.</p></div></li>
+    </ol>
+  </div>
+</section>
+
+<section class="section section-alt" id="config" aria-labelledby="config-title">
+  <div class="container split">
+    <div>
+      <div class="section-head" style="margin-bottom:8px">
+        <span class="sec-num">§ 4 &nbsp;decree.json</span>
+        <h2 id="config-title" class="h2">One file is the source of truth.</h2>
+        <p>Like a docs config for your agent. It sits at the root of your repo, it is readable in review, and every generated file comes from it.</p>
+      </div>
+      <ol class="loop">
+        <li><strong>Edit</strong> <code>decree.json</code> by hand, with editor autocomplete from <code>.decree/schema.json</code>.</li>
+        <li><strong>Or describe the change</strong>: <code>decree-harness refine "make it read-only"</code>.</li>
+        <li><strong>Regenerate</strong> with <code>decree-harness generate</code>. Use <code>--dry-run</code> to preview and <code>--clean</code> to remove files that are no longer produced.</li>
+        <li><strong>Check</strong> with <code>decree-harness doctor</code> and <code>decree-harness eval</code>.</li>
+      </ol>
+      <p style="margin:8px 0 0"><a class="btn btn-ghost" href="docs/config.html">decree.json reference <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></p>
+    </div>
+    <div>
+      <div class="code"><div class="code-head"><span>decree.json (trimmed)</span><button type="button" class="copy-btn" aria-label="Copy decree.json (trimmed)"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div><pre><code>{
+  <span class="c-key">"$schema"</span>: <span class="c-str">"./.decree/schema.json"</span>,
+  <span class="c-key">"version"</span>: <span class="c-num">1</span>,
+  <span class="c-key">"name"</span>: <span class="c-str">"acme-orders-agent"</span>,
+  <span class="c-key">"goal"</span>: <span class="c-str">"Operate the orders API and triage test failures"</span>,
+  <span class="c-key">"model"</span>: {
+    <span class="c-key">"id"</span>: <span class="c-str">"claude-opus-5"</span>,
+    <span class="c-key">"effort"</span>: <span class="c-str">"high"</span>,
+    <span class="c-key">"subagentId"</span>: <span class="c-str">"claude-sonnet-5"</span>,
+    <span class="c-key">"thinking"</span>: <span class="c-str">"adaptive"</span>
+  },
+  <span class="c-key">"tools"</span>: [
+    {
+      <span class="c-key">"name"</span>: <span class="c-str">"delete_order"</span>,
+      <span class="c-key">"description"</span>: <span class="c-str">"Permanently delete an order. Calls DELETE /orders/{id}. …"</span>,
+      <span class="c-key">"kind"</span>: <span class="c-str">"http"</span>,
+      <span class="c-key">"inputSchema"</span>: {
+        <span class="c-key">"type"</span>: <span class="c-str">"object"</span>,
+        <span class="c-key">"properties"</span>: { <span class="c-key">"id"</span>: { <span class="c-key">"type"</span>: <span class="c-str">"string"</span> } },
+        <span class="c-key">"required"</span>: [ <span class="c-str">"id"</span> ]
+      },
+      <span class="c-key">"readOnly"</span>: <span class="c-kw">false</span>,
+      <span class="c-key">"destructive"</span>: <span class="c-kw">true</span>,
+      <span class="c-key">"requiresApproval"</span>: <span class="c-kw">true</span>,
+      <span class="c-key">"http"</span>: {
+        <span class="c-key">"method"</span>: <span class="c-str">"DELETE"</span>,
+        <span class="c-key">"baseUrlEnv"</span>: <span class="c-str">"ACME_ORDERS_BASE_URL"</span>,
+        <span class="c-key">"defaultBaseUrl"</span>: <span class="c-str">"http://localhost:3000"</span>,
+        <span class="c-key">"path"</span>: <span class="c-str">"/orders/{id}"</span>,
+        <span class="c-key">"auth"</span>: { <span class="c-key">"type"</span>: <span class="c-str">"bearer"</span>, <span class="c-key">"env"</span>: <span class="c-str">"ACME_API_TOKEN"</span> }
+      },
+      <span class="c-key">"source"</span>: <span class="c-str">"openapi:DELETE /orders/{id}"</span>
+    }
+    <span class="c-com">// … 17 more tools, plus subagents, evals, env</span>
+  ],
+  <span class="c-key">"guardrails"</span>: {
+    <span class="c-key">"maxTurns"</span>: <span class="c-num">25</span>,
+    <span class="c-key">"maxCostUsd"</span>: <span class="c-num">5</span>,
+    <span class="c-key">"approvalMode"</span>: <span class="c-str">"destructive"</span>,
+    <span class="c-key">"allowedPaths"</span>: [ <span class="c-str">"."</span> ],
+    <span class="c-key">"redactEnv"</span>: [ <span class="c-str">"ANTHROPIC_API_KEY"</span>, <span class="c-str">"ACME_API_TOKEN"</span>, <span class="c-str">"STRIPE_SECRET_KEY"</span> ]
+  },
+  <span class="c-key">"targets"</span>: [ <span class="c-str">"typescript"</span>, <span class="c-str">"python"</span>, <span class="c-str">"mcp"</span>, <span class="c-str">"claude-code"</span> ]
+}</code></pre></div>
+      <p class="code-cap">From the fixture run above. The full file has 18 tools, 2 subagents, 9 evals and the env var list.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="commands" aria-labelledby="commands-title">
+  <div class="container">
+    <div class="section-head">
+      <span class="sec-num">§ 5 &nbsp;Commands</span>
+      <h2 id="commands-title" class="h2">Small CLI, one job per command.</h2>
+      <p>Useful flags everywhere: <code>--yes</code> for non-interactive runs, <code>--offline</code>, <code>--model &lt;id&gt;</code>, <code>--goal "&lt;text&gt;"</code>, <code>--no-critique</code> and <code>-C &lt;dir&gt;</code>.</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
+        <tbody>
+          <tr><td><a href="docs/commands.html#init"><code>init</code></a></td><td>Interactive wizard: scan, ask for the goal and targets, plan, generate. The default command.</td></tr>
+          <tr><td><a href="docs/commands.html#scan"><code>scan</code></a></td><td>Scan only. Writes <code>.decree/profile.json</code>.</td></tr>
+          <tr><td><a href="docs/commands.html#plan"><code>plan</code></a></td><td>Scan and plan. Writes <code>decree.json</code> only.</td></tr>
+          <tr><td><a href="docs/commands.html#generate"><code>generate</code></a></td><td>Render <code>decree.json</code> into code.</td></tr>
+          <tr><td><a href="docs/commands.html#refine"><code>refine "&lt;feedback&gt;"</code></a></td><td>Change the harness in plain English, then regenerate.</td></tr>
+          <tr><td><a href="docs/commands.html#chat"><code>chat</code></a></td><td>Talk to the agent in your terminal. Tools run locally with approval prompts.</td></tr>
+          <tr><td><a href="docs/commands.html#run"><code>run "&lt;prompt&gt;"</code></a></td><td>One-shot run. <code>--json</code> for machine output.</td></tr>
+          <tr><td><a href="docs/commands.html#eval"><code>eval</code></a></td><td>Run the eval cases and report pass/fail.</td></tr>
+          <tr><td><a href="docs/commands.html#doctor"><code>doctor</code></a></td><td>Check Node, API key, <code>decree.json</code>, env vars and generated output.</td></tr>
+          <tr><td><a href="docs/commands.html#tools"><code>tools</code></a> · <a href="docs/commands.html#schema"><code>schema</code></a></td><td>List the tools in <code>decree.json</code>, or print its JSON schema.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt" id="faq" aria-labelledby="faq-title">
+  <div class="container split">
+    <div class="section-head">
+      <span class="sec-num">§ 6 &nbsp;FAQ</span>
+      <h2 id="faq-title" class="h2">Questions people ask first.</h2>
+      <p>More in the <a href="docs/faq.html">full FAQ</a>.</p>
+    </div>
+    <div class="faq">
+      <details id="key" open><summary>Do I need an Anthropic API key?</summary><div class="a"><p>Not to try it. <code>--offline</code> uses a heuristic planner that builds the same kind of spec from the scan alone, and <code>scan</code>, <code>generate</code>, <code>tools</code>, <code>schema</code> and <code>doctor</code> never call the API. The demo on the home page ran offline.</p>
+<p>You need a key for a Claude-designed plan, and for <code>refine</code>, <code>chat</code>, <code>run</code> and <code>eval</code>. decree reads <code>ANTHROPIC_API_KEY</code>, then a <code>.env</code> file, or <code>--api-key</code>. With a key set, <code>decree-harness init --force</code> re-plans an offline spec with Claude.</p></div></details>
+<details id="cost"><summary>What drives the cost?</summary><div class="a"><ul>
+<li><strong>Planning.</strong> <code>init</code> and <code>plan</code> make an architect call and a critic call on the planner model (default <code>claude-opus-5</code>, $5 input and $25 output per million tokens). <code>--no-critique</code> skips the critic. After planning, decree prints the tokens used and the estimated cost.</li>
+<li><strong>Refining.</strong> Each <code>refine</code> is one more planning call.</li>
+<li><strong>Running the agent.</strong> <code>chat</code>, <code>run</code> and the generated agents bill per turn on <code>model.id</code>. Subagents default to <code>claude-sonnet-5</code> ($2 and $10). Prompt caching is on by default, and cache reads cost 0.1x the input price.</li>
+<li><strong>Evals.</strong> <code>eval</code> runs the agent once per case, plus a judge call for cases that have a rubric.</li>
+</ul>
+<p><code>guardrails.maxCostUsd</code> stops any run once its estimated cost passes the cap. In chat, <code>/cost</code> shows the spend so far.</p></div></details>
+<details id="offline"><summary>What does offline mode do differently?</summary><div class="a"><p>The offline planner derives tools, the system prompt, subagents, guardrails and evals from the scan with fixed rules instead of asking Claude. The spec has the same shape and passes through the same grounding and validation, and <code>provenance.generator</code> is set to <code>heuristic</code> so you can tell them apart.</p>
+<p>A Claude plan adds an architect and a critic: better tool descriptions, a prompt written for your goal, and evals chosen for your project. You can start offline and re-plan later.</p></div></details>
+<details id="models"><summary>Which models does it use?</summary><div class="a"><p>Claude only: the planner and the generated agents use the Anthropic API. Defaults are <code>claude-opus-5</code> with adaptive thinking for the planner and the agent, and <code>claude-sonnet-5</code> for subagents. Change them with <code>--model</code> or in <code>decree.json</code> (<code>model.id</code>, <code>model.subagentId</code>, <code>model.effort</code>, <code>model.thinking</code>, and per-subagent <code>model</code>).</p></div></details>
+    </div>
+  </div>
+</section>
+
+<section class="cta" aria-labelledby="cta-title">
+  <div class="container"><div class="cta-box">
+    <div>
+      <span class="sec-num">§ 7 &nbsp;Try it</span>
+      <h2 id="cta-title" class="h2" style="margin:0">Point it at your repo.</h2>
+      <p class="lede" style="margin:14px 0 0">Node 20.12 or newer. Everything it writes is plain code in your project.</p>
+    </div>
+    <div class="cmd"><span class="prompt" aria-hidden="true">$</span><code>npx decree-harness</code><button type="button" class="copy-btn" data-copy="npx decree-harness" aria-label="Copy command: npx decree-harness"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div>
+  </div></div>
+</section>
+</main>
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div>
+      <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><circle cx="16" cy="16" r="10.5" fill="none" stroke="var(--accent-fg)" stroke-width="1.5" stroke-dasharray="2.2 2.2"/><path d="M11.5 16.4l3.1 3.1 6-6.6" fill="none" stroke="var(--accent-fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>decree</span></a>
+      <p>Open source under the MIT license. Built for Claude on the Anthropic API.</p>
+    </div>
+    <nav aria-label="Footer">
+      <ul class="footer-links">
+        <li><a href="docs/index.html">Quickstart</a></li>
+        <li><a href="docs/commands.html">Commands</a></li>
+        <li><a href="docs/config.html">decree.json</a></li>
+        <li><a href="docs/targets.html">Targets</a></li>
+        <li><a href="docs/safety.html">Safety</a></li>
+        <li><a href="docs/faq.html">FAQ</a></li>
+        <li><a href="https://github.com/TCYTseven/decree-app">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</footer>
+<script src="assets/site.js" defer></script>
+</body>
+</html>

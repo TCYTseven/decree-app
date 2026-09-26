@@ -1,0 +1,12 @@
+Usage: decree-harness refine [options] <feedback...>
+
+change the harness in plain English (uses Claude), then regenerate
+
+Options:
+  -m, --model <id>  model to use for refinement
+  --api-key <key>   Anthropic API key
+  -o, --out <dir>   output directory (default: "agent")
+  --no-generate     only update decree.json
+  -f, --force       overwrite generated files you edited
+  --dry-run         show the diff without writing
+  -h, --help        show help

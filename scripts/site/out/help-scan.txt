@@ -1,0 +1,7 @@
+Usage: decree-harness scan [options] [dir]
+
+scan the project and write .decree/profile.json
+
+Options:
+  --json      print the profile as JSON
+  -h, --help  show help

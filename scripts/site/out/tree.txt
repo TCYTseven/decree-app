@@ -1,0 +1,11 @@
+decree.json          the harness spec (edit it, then `decree-harness generate`)
+.decree/             profile.json, manifest.json, schema.json
+agent/
+  README.md          how to run each target
+  harness.md         design doc: prompt, every tool, safety flags, planner notes
+  evals.json         eval cases
+  .env.example       env vars the tools need
+  typescript/        standalone agent (Anthropic TS SDK)
+  python/            standalone agent (Anthropic Python SDK)
+  mcp-server/        MCP server for Claude Code, Claude Desktop, Cursor
+  claude-code/       CLAUDE.md, .claude/{agents,commands,skills,settings.json}, .mcp.json

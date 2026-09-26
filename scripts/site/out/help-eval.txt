@@ -1,0 +1,12 @@
+Usage: decree-harness eval [options]
+
+run the evals in decree.json and report pass/fail
+
+Options:
+  --filter <text>    only run evals whose id contains <text>
+  --live-tools       execute tools for real (default: dry-run)
+  --concurrency <n>  evals to run in parallel (default: "2")
+  -m, --model <id>   override the agent model
+  --api-key <key>    Anthropic API key
+  --json             print results as JSON
+  -h, --help         show help

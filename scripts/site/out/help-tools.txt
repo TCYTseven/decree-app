@@ -1,0 +1,7 @@
+Usage: decree-harness tools [options]
+
+list the tools in decree.json
+
+Options:
+  --json      print tools as JSON
+  -h, --help  show help

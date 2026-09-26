@@ -1,0 +1,43 @@
+Usage: decree-harness [options] [command]
+
+Scan a codebase and generate an optimal AI agent harness for it.
+
+Options:
+  -v, --version                   print the version
+  -C, --cwd <dir>                 run as if decree was started in <dir>
+  --verbose                       print debug output and stack traces
+  --no-color                      disable colored output
+  -h, --help                      show help
+
+Commands:
+  init [options] [dir]            scan, plan and generate a harness (the default
+                                  command)
+  scan [options] [dir]            scan the project and write
+                                  .decree/profile.json
+  plan [options] [dir]            scan + plan, writing decree.json only (no
+                                  code)
+  generate|gen [options]          render decree.json into runnable code
+  refine [options] <feedback...>  change the harness in plain English (uses
+                                  Claude), then regenerate
+  chat [options]                  chat with your agent in the terminal (tools
+                                  run locally)
+  run [options] [prompt...]       run the agent once on a prompt (also reads
+                                  stdin)
+  eval [options]                  run the evals in decree.json and report
+                                  pass/fail
+  doctor [options]                check your environment, API key, decree.json
+                                  and generated code
+  tools [options]                 list the tools in decree.json
+  schema                          print the JSON schema for decree.json
+  help [command]                  display help for command
+
+Examples:
+  $ npx decree-harness                          scan, plan and generate interactively
+  $ npx decree-harness init --yes --offline     non-interactive, no API key needed
+  $ npx decree-harness init --goal "Triage failing CI runs" --targets typescript,mcp
+  $ npx decree-harness chat                     talk to the generated agent
+  $ npx decree-harness run "How many orders are pending?" --json
+  $ npx decree-harness refine "make every tool read-only"
+  $ npx decree-harness eval --filter orders
+
+Docs: decree.json is the source of truth. Edit it, then run `decree-harness generate`.

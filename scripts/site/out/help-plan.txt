@@ -1,0 +1,15 @@
+Usage: decree-harness plan [options] [dir]
+
+scan + plan, writing decree.json only (no code)
+
+Options:
+  -g, --goal <text>     what the agent should do, in your words
+  -t, --targets <list>  comma-separated: typescript, python, mcp, claude-code
+                        (or all)
+  --offline             use the heuristic planner instead of Claude
+  -m, --model <id>      model for planning and the generated harness (default
+                        claude-opus-5)
+  --no-critique         skip the critic pass (faster, cheaper)
+  --api-key <key>       Anthropic API key (default: ANTHROPIC_API_KEY or .env)
+  -y, --yes             don't ask before overwriting decree.json
+  -h, --help            show help

@@ -1,0 +1,11 @@
+Usage: decree-harness run [options] [prompt...]
+
+run the agent once on a prompt (also reads stdin)
+
+Options:
+  --json            print the full RunResult as JSON
+  -y, --yes         auto-approve every tool call (dangerous)
+  -m, --model <id>  override the model in decree.json
+  --api-key <key>   Anthropic API key
+  --dry-run-tools   tools describe what they would do instead of executing
+  -h, --help        show help

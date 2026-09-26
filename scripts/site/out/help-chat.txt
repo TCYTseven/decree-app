@@ -1,0 +1,9 @@
+Usage: decree-harness chat [options]
+
+chat with your agent in the terminal (tools run locally)
+
+Options:
+  -m, --model <id>  override the model in decree.json
+  --api-key <key>   Anthropic API key
+  --dry-run-tools   tools describe what they would do instead of executing
+  -h, --help        show help

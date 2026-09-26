@@ -1,0 +1,12 @@
+Usage: decree-harness generate|gen [options]
+
+render decree.json into runnable code
+
+Options:
+  -t, --targets <list>  override decree.json targets
+  -o, --out <dir>       output directory (default: "agent")
+  -f, --force           overwrite files you edited
+  --dry-run             show what would change without writing
+  --clean               remove previously generated files that are no longer
+                        produced
+  -h, --help            show help

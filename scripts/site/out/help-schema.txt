@@ -1,0 +1,6 @@
+Usage: decree-harness schema [options]
+
+print the JSON schema for decree.json
+
+Options:
+  -h, --help  show help
