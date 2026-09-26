@@ -1,4 +1,5 @@
 import type { JSONSchema, ToolSpec } from "../../../core/types.js";
+import { stripPrivateKeywords } from "../../../core/json-schema.js";
 import { isFsKind, type TsModel, type TsTool } from "../model.js";
 import { indent, oneLine, tsLiteral } from "../render.js";
 
@@ -80,9 +81,12 @@ function toolEntry(t: TsTool): string {
   return `${comment}\n{\n  definition: ${tsLiteral(definition, 1)},\n${indent(flags, 2)}\n  run: ${runExpression(spec)},\n},`;
 }
 
-/** Tool input schemas must be objects; tolerate specs that omit `type`. */
+/**
+ * Tool input schemas must be objects; tolerate specs that omit `type`. decree-private keywords (`x-allow-flags`,
+ * ...) are stripped: the API never sees them (the shell binding carries allowFlags instead).
+ */
 function objectSchema(schema: JSONSchema): JSONSchema {
-  const { type: _type, ...rest } = schema ?? {};
+  const { type: _type, ...rest } = stripPrivateKeywords(schema ?? {});
   return { type: "object", properties: {}, ...rest };
 }
 

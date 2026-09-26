@@ -335,7 +335,7 @@ export function fsTs(): string {
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { GUARDRAILS, PROJECT_ROOT } from "../config.js";
+import { GUARDRAILS, PROJECT_ROOT, redact } from "../config.js";
 import type { ToolResult } from "../types.js";
 
 export interface FsBinding {
@@ -349,15 +349,33 @@ const DEFAULT_MAX_BYTES = 200_000;
 const MAX_LISTED_FILES = 500;
 const MAX_MATCHES = 200;
 const MAX_SEARCH_FILE_BYTES = 1_000_000;
+/** read_file reads this many bytes past maxBytes so redaction sees a secret that straddles the cut. */
+const REDACT_MARGIN = 4096;
+/** A directory holding this file is decree's generated output: list_files and search skip it. */
+const GENERATED_MARKER = ".decree-generated";
 const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", ".decree", ".venv", "venv", "__pycache__", ".next", ".nuxt", ".svelte-kit", ".turbo", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache"]);
 
 export async function readFile(input: Record<string, unknown>, binding: FsBinding): Promise<ToolResult> {
   return guarded(async () => {
     const target = await resolvePath(binding, input.path);
     const maxBytes = binding.maxBytes ?? DEFAULT_MAX_BYTES;
-    const data = await fs.readFile(target);
-    if (data.length <= maxBytes) return data.toString("utf8");
-    return \`\${data.subarray(0, maxBytes).toString("utf8")}\\n…[truncated \${data.length - maxBytes} bytes]\`;
+    const handle = await fs.open(target, "r");
+    try {
+      const stat = await handle.stat();
+      if (stat.isDirectory()) throw new ToolError("That path is a directory; use the list tool instead.");
+      const size = stat.size;
+      // Read a margin past the limit and redact BEFORE cutting, so no fragment of a secret survives the cut.
+      const buf = Buffer.alloc(Math.min(size, maxBytes + REDACT_MARGIN));
+      const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
+      const out = Buffer.from(redact(buf.subarray(0, bytesRead).toString("utf8")), "utf8");
+      // When the file was not read to the end, the last REDACT_MARGIN bytes may start a secret that
+      // continues past what was read; always cut them.
+      const keep = bytesRead >= size ? maxBytes : Math.max(0, Math.min(maxBytes, out.length - REDACT_MARGIN));
+      if (out.length <= keep) return out.toString("utf8");
+      return \`\${out.subarray(0, keep).toString("utf8")}\\n…[truncated \${out.length - keep + size - bytesRead} bytes]\`;
+    } finally {
+      await handle.close();
+    }
   });
 }
 
@@ -500,7 +518,7 @@ function isInside(parent: string, child: string): boolean {
   return rel === "" || (rel !== ".." && !rel.startsWith(".." + path.sep) && !path.isAbsolute(rel));
 }
 
-/** Files under \`dir\` as sorted POSIX paths relative to it, skipping ignored and disallowed directories. */
+/** Files under \`dir\` as sorted POSIX paths relative to it, skipping ignored, generated and disallowed directories. */
 async function* walk(dir: string, prefix = ""): AsyncGenerator<string> {
   const entries = await fs.readdir(path.join(dir, prefix), { withFileTypes: true });
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
@@ -510,12 +528,29 @@ async function* walk(dir: string, prefix = ""): AsyncGenerator<string> {
     const abs = path.join(dir, rel);
     if (entry.isDirectory()) {
       if (IGNORED_DIRS.has(entry.name)) continue;
+      // decree's own generated output (marked with .decree-generated) is not part of the project.
+      if (await isGeneratedDir(abs)) continue;
       // Descend only where an allowed path is inside, or contains, this directory.
       if (allowed.some((a) => isInside(a, abs) || isInside(abs, a))) yield* walk(dir, rel);
     } else if (entry.isFile() && allowed.some((a) => isInside(a, abs))) {
       yield rel;
     }
   }
+}
+
+const generatedDirs = new Map<string, boolean>();
+
+/** Whether \`dir\` holds the .decree-generated marker (cached per directory). */
+async function isGeneratedDir(dir: string): Promise<boolean> {
+  let hit = generatedDirs.get(dir);
+  if (hit === undefined) {
+    hit = await fs.access(path.join(dir, GENERATED_MARKER)).then(
+      () => true,
+      () => false,
+    );
+    generatedDirs.set(dir, hit);
+  }
+  return hit;
 }
 
 function escapeRegExp(text: string): string {

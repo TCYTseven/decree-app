@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import ignore, { type Ignore } from "ignore";
+import { GENERATED_MARKER } from "../core/markers.js";
 
 /** Directories that are never walked, regardless of .gitignore. */
 export const ALWAYS_SKIP_DIRS = new Set([
@@ -155,18 +156,24 @@ export async function walkProject(root: string, maxFiles: number): Promise<WalkR
     }
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     const fileEntries: { name: string; childRel: string }[] = [];
+    const subdirs: string[] = [];
     for (const e of entries) {
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) {
         if (ALWAYS_SKIP_DIRS.has(e.name) || e.name.endsWith(".egg-info") || generated.dirs.has(childRel)) continue;
         if (isIgnored(matchers, childRel, true)) continue;
-        out.subdirs.push({ rel: childRel, matchers });
+        subdirs.push(childRel);
       } else if (e.isFile()) {
         if (generated.files.has(childRel) || isIgnored(matchers, childRel, false)) continue;
         fileEntries.push({ name: e.name, childRel });
       }
       // symlinks and special files are skipped (avoids cycles)
     }
+    // A directory holding the .decree-generated marker is decree's own output (even without a manifest): skip it.
+    const marked = await Promise.all(subdirs.map((d) => fs.access(path.join(root, d, GENERATED_MARKER)).then(() => true, () => false)));
+    subdirs.forEach((d, i) => {
+      if (!marked[i]) out.subdirs.push({ rel: d, matchers });
+    });
     const depth = rel ? rel.split("/").length : 0;
     const stats = await Promise.all(fileEntries.map((f) => fs.stat(path.join(root, f.childRel)).catch(() => null)));
     fileEntries.forEach((f, i) => {

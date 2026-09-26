@@ -1,3 +1,4 @@
+import { GENERATED_MARKER, GENERATED_MARKER_CONTENT } from "../../core/markers.js";
 import type { GeneratedFile, GenerateOptions, HarnessSpec, Target, ToolSpec } from "../../core/types.js";
 import { blockquote, codeBlock, demoteHeadings, inlineCode, oneLine, renderTable } from "./markdown.js";
 import { pythonPackageName, scriptName } from "../python/py.js";
@@ -389,5 +390,7 @@ export function generateCommon(spec: HarnessSpec, opts: GenerateOptions): Genera
     { path: "evals.json", content: JSON.stringify(spec.evals, null, 2) + "\n" },
     { path: ".env.example", content: renderEnvExample(spec) },
     { path: "harness.md", content: renderHarnessDoc(spec, opts) },
+    // Keeps list_files / search (runtime and generated targets) and the scanner out of the generated harness.
+    { path: GENERATED_MARKER, content: GENERATED_MARKER_CONTENT },
   ];
 }

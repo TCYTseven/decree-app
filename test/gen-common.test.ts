@@ -96,7 +96,7 @@ describe("markdown helpers", () => {
 describe("generateCommon", () => {
   it("emits the four root files", () => {
     const files = generateCommon(sampleSpec(), OPTS);
-    expect(files.map((f) => f.path)).toEqual(["README.md", "evals.json", ".env.example", "harness.md"]);
+    expect(files.map((f) => f.path)).toEqual(["README.md", "evals.json", ".env.example", "harness.md", ".decree-generated"]);
     for (const f of files) expect(f.content.endsWith("\n")).toBe(true);
   });
 

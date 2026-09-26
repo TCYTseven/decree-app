@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { stripPrivateKeywords } from "../../core/json-schema.js";
 import type { Guardrails, HarnessSpec, SubagentSpec, ToolSpec } from "../../core/types.js";
 import { envOf, fail, redact, validateInput, type ToolContext, type ToolInput, type ToolOutput } from "./common.js";
 import { executeListFiles, executeReadFile, executeSearch, executeWriteFile } from "./fs.js";
@@ -54,7 +55,8 @@ export function buildToolParams(
         out.push({ type: "memory_20250818", name: "memory" });
         break;
       default: {
-        const schema = tool.inputSchema ?? {};
+        // decree-private keywords (`x-allow-flags`, ...) stay local; the API never sees them.
+        const schema = stripPrivateKeywords(tool.inputSchema ?? {});
         out.push({
           name: tool.name,
           description: tool.description,

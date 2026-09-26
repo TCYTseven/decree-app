@@ -18,20 +18,60 @@ and regenerate whenever the code changes.
 
 ## What you get
 
+`npx decree-harness init --yes --offline --targets all` on
+[`test/fixtures/express-openapi`](test/fixtures/express-openapi) (an Express +
+OpenAPI orders service) writes:
+
 ```
 decree.json                 the harness spec (edit it, then `decree-harness generate`)
+.decree/                    profile.json (last scan), manifest.json (hashes of generated files), schema.json
 agent/
-  README.md                 overview of the generated harness
+  README.md                 overview of the generated harness and how to run each target
   harness.md                design doc: prompt, every tool, safety flags, planner notes
   evals.json                eval cases
-  .env.example
-  typescript/               standalone agent (Anthropic TS SDK): CLI, REPL, evals
-  python/                   standalone agent (Anthropic Python SDK): CLI, REPL, evals, pytest
-  mcp-server/               MCP server exposing the tools to Claude Code, Claude Desktop, Cursor
-  claude-code/              CLAUDE.md, .claude/agents, skills, slash commands, settings.json, .mcp.json
+  .env.example              env vars the tools need
+  .decree-generated         marker: decree's file tools and scanner skip this directory
+  typescript/               standalone agent (Anthropic TS SDK): src/{agent,cli,loop,tools,...}.ts, CLI, REPL, evals
+  python/                   standalone agent (Anthropic Python SDK): acme_orders_agent/, pyproject.toml, pytest tests/
+  mcp-server/               MCP server (src/server.ts, src/tools.ts) for Claude Code, Claude Desktop, Cursor
+  claude-code/              CLAUDE.md, .claude/{agents,commands,skills,settings.json}, .mcp.json
 ```
 
 Pick targets with `--targets typescript,python,mcp,claude-code` (or `all`).
+
+## Example
+
+`decree-harness tools --no-color` for that fixture (offline plan):
+
+```
+Acme Orders Agent · 18 tools · approval mode: destructive
+┌───────────────────┬────────────┬─────────────────────┬─────────────────────┬─────────────────────┐
+│ Tool              │ Kind       │ Flags               │ Binds to            │ Source              │
+├───────────────────┼────────────┼─────────────────────┼─────────────────────┼─────────────────────┤
+│ get_health        │ http       │ ● read-only         │ GET /health         │ openapi:GET /health │
+│ list_orders       │ http       │ ● read-only         │ GET /orders         │ openapi:GET /orders │
+│ create_order      │ http       │ • writes            │ POST /orders        │ openapi:POST /orde… │
+│ get_order         │ http       │ ● read-only         │ GET /orders/{id}    │ openapi:GET /order… │
+│ delete_order      │ http       │ ▲ approval destruc… │ DELETE /orders/{id} │ openapi:DELETE /or… │
+│ cancel_order      │ http       │ ▲ approval destruc… │ POST /orders/{id}/… │ openapi:POST /orde… │
+│ list_customers    │ http       │ ● read-only         │ GET /customers      │ openapi:GET /custo… │
+│ get_customer      │ http       │ ● read-only         │ GET /customers/{cu… │ openapi:GET /custo… │
+│ list_order_events │ http       │ ● read-only         │ GET /orders/{id}/e… │ route:GET /orders/… │
+│ run_tests         │ shell      │ • writes            │ npm run test -- {{… │ package.json#scrip… │
+│ run_lint          │ shell      │ • writes            │ npm run lint        │ package.json#scrip… │
+│ run_build         │ shell      │ • writes            │ npm run build       │ package.json#scrip… │
+│ run_deploy        │ shell      │ ▲ approval destruc… │ npm run deploy      │ package.json#scrip… │
+│ run_db_migrate    │ shell      │ ▲ approval destruc… │ npm run db:migrate  │ package.json#scrip… │
+│ run_db_seed       │ shell      │ ▲ approval destruc… │ npm run db:seed     │ package.json#scrip… │
+│ read_file         │ read_file  │ ● read-only         │ .                   │ builtin             │
+│ list_files        │ list_files │ ● read-only         │ .                   │ builtin             │
+│ search_code       │ search     │ ● read-only         │ .                   │ builtin             │
+└───────────────────┴────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
+
+Subagents
+  api-investigator › get_health, list_orders, get_order, list_customers, get_customer, list_order_events
+  code-investigator › read_file, list_files, search_code
+```
 
 ## How it plans
 

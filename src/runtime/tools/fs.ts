@@ -1,8 +1,9 @@
 import { createReadStream } from "node:fs";
-import { mkdir, open, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, open, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import fg from "fast-glob";
+import { GENERATED_MARKER } from "../../core/markers.js";
 import type { ToolSpec } from "../../core/types.js";
 import {
   allowedRoots,
@@ -11,6 +12,7 @@ import {
   isInside,
   ok,
   PathError,
+  redactFor,
   toPosix,
   type ToolContext,
   type ToolInput,
@@ -18,6 +20,8 @@ import {
 } from "./common.js";
 
 export const READ_DEFAULT_MAX_BYTES = 200_000;
+/** read_file reads this many bytes past the limit so redaction sees a secret that straddles the cut. */
+export const READ_REDACT_MARGIN = 4096;
 export const LIST_MAX_RESULTS = 500;
 export const SEARCH_MAX_MATCHES = 200;
 export const SEARCH_MAX_FILE_BYTES = 1_000_000;
@@ -57,18 +61,31 @@ export async function executeReadFile(tool: ToolSpec, input: ToolInput, ctx: Too
     const max = tool.fs?.maxBytes ?? READ_DEFAULT_MAX_BYTES;
     const fh = await open(target, "r");
     try {
-      const size = Math.min(st.size, max);
+      // Read a margin past the limit and redact BEFORE cutting, so no fragment of a secret survives the cut.
+      const size = Math.min(st.size, max + READ_REDACT_MARGIN);
       const buf = Buffer.alloc(size);
       const { bytesRead } = await fh.read(buf, 0, size, 0);
-      let text = buf.subarray(0, bytesRead).toString("utf8");
-      if (st.size > max) text += `\n…[truncated ${st.size - max} bytes]`;
-      return ok(text);
+      return ok(redactThenTruncate(buf.subarray(0, bytesRead), st.size, max, (t) => redactFor(ctx, t)));
     } finally {
       await fh.close();
     }
   } catch (err) {
     return refuse(err);
   }
+}
+
+/**
+ * read_file output: redact the bytes read (up to `max + READ_REDACT_MARGIN`), then keep at most `max` bytes. When
+ * the file was not read to the end, the last READ_REDACT_MARGIN bytes are always cut too: they may end in the
+ * start of a secret that continues past what was read, which redaction cannot recognize.
+ */
+export function redactThenTruncate(data: Buffer, fileSize: number, max: number, redactText: (t: string) => string): string {
+  const out = Buffer.from(redactText(data.toString("utf8")), "utf8");
+  const complete = data.length >= fileSize;
+  const keep = complete ? max : Math.max(0, Math.min(max, out.length - READ_REDACT_MARGIN));
+  if (out.length <= keep) return out.toString("utf8");
+  const dropped = out.length - keep + (fileSize - data.length);
+  return `${out.subarray(0, keep).toString("utf8")}\n…[truncated ${dropped} bytes]`;
 }
 
 export async function executeWriteFile(tool: ToolSpec, input: ToolInput, ctx: ToolContext): Promise<ToolOutput> {
@@ -92,10 +109,34 @@ function checkPattern(pattern: string): void {
   if (pattern.split(/[\\/]/).includes("..")) throw new PathError(`glob may not contain "..": ${pattern}`);
 }
 
-/** Stream files under base matching pattern, confined to base and allowed roots. */
+/**
+ * Whether `abs` sits below a directory (strictly inside `base`) that holds the `.decree-generated` marker, i.e. in
+ * decree's own generated output. Each directory is checked once per call (`cache`).
+ */
+async function inGeneratedDir(base: string, abs: string, cache: Map<string, Promise<boolean>>): Promise<boolean> {
+  const rel = path.relative(base, path.dirname(abs));
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
+  let dir = base;
+  for (const part of rel.split(path.sep)) {
+    dir = path.join(dir, part);
+    let hit = cache.get(dir);
+    if (hit === undefined) {
+      hit = access(path.join(dir, GENERATED_MARKER)).then(
+        () => true,
+        () => false,
+      );
+      cache.set(dir, hit);
+    }
+    if (await hit) return true;
+  }
+  return false;
+}
+
+/** Stream files under base matching pattern, confined to base and allowed roots, outside generated output dirs. */
 async function* globFiles(base: string, pattern: string, ctx: ToolContext): AsyncGenerator<string> {
   checkPattern(pattern);
   const allowed = allowedRoots(ctx);
+  const generated = new Map<string, Promise<boolean>>();
   const stream = fg.stream(pattern, {
     cwd: base,
     ignore: FS_IGNORE,
@@ -109,6 +150,7 @@ async function* globFiles(base: string, pattern: string, ctx: ToolContext): Asyn
     const abs = path.resolve(String(entry));
     if (!isInside(base, abs)) continue;
     if (allowed.length && !allowed.some((a) => isInside(a, abs))) continue;
+    if (await inGeneratedDir(base, abs, generated)) continue;
     yield abs;
   }
 }

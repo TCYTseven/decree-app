@@ -30,7 +30,7 @@ coordinating: every module depends on them.
 | `.decree/manifest.json` | sha256 of every file decree last generated; used to avoid clobbering user edits. |
 | `.decree/memory/` | Backing store for the `memory` tool when running via `decree-harness chat/run`. |
 | `.decree/runs/` | JSONL transcripts of `run`/`chat`/`eval` sessions. |
-| `agent/` (default out dir) | Generated targets: `agent/typescript`, `agent/python`, `agent/mcp-server`, `agent/claude-code`, plus `agent/README.md`, `agent/evals.json`, `agent/.env.example`. |
+| `agent/` (default out dir) | Generated targets: `agent/typescript`, `agent/python`, `agent/mcp-server`, `agent/claude-code`, plus `agent/README.md`, `agent/harness.md`, `agent/evals.json`, `agent/.env.example` and the `agent/.decree-generated` marker (see list_files / search below). |
 
 ## Models
 
@@ -80,10 +80,15 @@ Every `ToolSpec` has a `kind`. Implementations:
 - **read_file / write_file / list_files / search**: all paths resolved against
   `projectRoot/fs.root`; refuse anything that escapes it (lexical check + realpath when it exists)
   and anything outside `guardrails.allowedPaths`. `read_file` returns content (max `fs.maxBytes ?? 200000`
-  bytes, then truncated note). `write_file` mkdir -p's and returns `wrote <n> bytes to <path>`.
+  bytes, then `\n…[truncated N bytes]`). It reads up to `maxBytes + 4096` bytes, redacts (see Output hygiene),
+  and only then truncates to `maxBytes`; when the file was not read to the end, the last 4096 redacted bytes are
+  always cut as well (they may end in the start of a secret that continues past what was read). `write_file` mkdir -p's and returns `wrote <n> bytes to <path>`.
   `list_files` globs (`pattern`), ignores `node_modules`, `.git`, `dist`, `.decree`, `.venv`, `venv`, `__pycache__`,
   `.next`, `.nuxt`, `.svelte-kit`, `.turbo`, `.tox`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache` (same list for `search`), max 500 results,
-  one per line. `search` takes `query` (regex) + optional `glob`, skips binary files and files > 1MB,
+  one per line. `list_files` and `search` also skip every directory below the tool root that contains a
+  `.decree-generated` file: `generateCommon` writes that marker at the root of the output dir (`agent/`), so the
+  agent's file tools never wander into the generated harness. Checked when descending into a directory, result
+  cached per directory. The scanner (`src/scanner/walk.ts`) skips marked directories too. `search` takes `query` (regex) + optional `glob`, skips binary files and files > 1MB,
   max 200 matches formatted `path:line: text`.
 - **web_search**: Anthropic server tool `{ type: "web_search_20260209", name: "web_search", max_uses: 5 }`.
 - **web_fetch**: Anthropic server tool `{ type: "web_fetch_20260209", name: "web_fetch", max_uses: 5 }`.
@@ -93,6 +98,13 @@ Every `ToolSpec` has a `kind`. Implementations:
 
 Server tools (`web_search`, `web_fetch`) and `memory` have empty `inputSchema` in the spec; they are
 declared with their Anthropic type instead of a custom schema.
+
+**decree-private schema keywords.** Keys starting with `x-` (`x-allow-flags`, `x-json-string`, ...) are decree's
+own annotations. They are stripped, at any depth, from every `input_schema` sent to the API
+(`stripPrivateKeywords` in `src/core/json-schema.ts`: runtime `buildToolParams`, the generated TypeScript and
+Python registries, and the MCP server's zod schemas). Property names, `$defs` names and instance data (`enum`,
+`const`, `default`, `examples`, `required`) are not keywords and are kept, so a header param named `x-request-id`
+survives. Targets carry what they need from these keywords in their binding data instead (shell `allowFlags`).
 
 ### Approval
 

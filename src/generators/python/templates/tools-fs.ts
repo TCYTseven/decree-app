@@ -20,7 +20,13 @@ from ..config import (
     SEARCH_MAX_FILE_BYTES,
     SEARCH_MAX_MATCHES,
 )
-from .base import ToolResult
+from .base import ToolResult, redact
+
+#: read_file reads this many bytes past maxBytes so redaction sees a secret that straddles the cut.
+REDACT_MARGIN = 4096
+#: A directory holding this file is decree's generated output: list_files and search skip it.
+GENERATED_MARKER = ".decree-generated"
+_generated_dirs: dict[Path, bool] = {}
 
 
 class PathError(ValueError):
@@ -132,12 +138,28 @@ def _static_prefix(pattern: str) -> str:
     return "/".join(prefix)
 
 
+def is_generated_dir(path: Path) -> bool:
+    """Whether the directory holds the .decree-generated marker (cached per directory)."""
+    hit = _generated_dirs.get(path)
+    if hit is None:
+        hit = _generated_dirs[path] = (path / GENERATED_MARKER).is_file()
+    return hit
+
+
 def walk_files(base: Path, start: Path) -> Iterator[Path]:
-    """Every file under start, sorted, skipping IGNORED_DIRS and symlinked directories."""
+    """Every file under start, sorted, skipping IGNORED_DIRS, generated output and symlinked directories."""
     if not start.is_dir():
         return
+    # The walk may start below base (a glob's static prefix): directories on the way down count too.
+    try:
+        between = start.relative_to(base).parts
+    except ValueError:
+        between = ()
+    for i in range(1, len(between) + 1):
+        if is_generated_dir(base.joinpath(*between[:i])):
+            return
     for dirpath, dirnames, filenames in os.walk(start):
-        dirnames[:] = sorted(d for d in dirnames if d not in IGNORED_DIRS)
+        dirnames[:] = sorted(d for d in dirnames if d not in IGNORED_DIRS and not is_generated_dir(Path(dirpath) / d))
         for name in sorted(filenames):
             yield Path(dirpath) / name
 
@@ -180,11 +202,17 @@ def read_file(binding: Mapping[str, Any], args: Mapping[str, Any], project_root:
         return ToolResult.error(f"{rel} is a directory; list it with a glob instead.")
     max_bytes = int(binding.get("maxBytes") or FS_DEFAULT_MAX_BYTES)
     size = path.stat().st_size
+    # Read a margin past the limit and redact BEFORE cutting, so no fragment of a secret survives the cut.
     with path.open("rb") as handle:
-        data = handle.read(max_bytes)
-    text = data.decode("utf-8", errors="replace")
-    if size > max_bytes:
-        text += f"\n…[truncated: showing the first {max_bytes} of {size} bytes]"
+        data = handle.read(max_bytes + REDACT_MARGIN)
+    out = redact(data.decode("utf-8", errors="replace")).encode("utf-8")
+    # When the file was not read to the end, the last REDACT_MARGIN bytes may start a secret that
+    # continues past what was read; always cut them.
+    keep = max_bytes if len(data) >= size else max(0, min(max_bytes, len(out) - REDACT_MARGIN))
+    if len(out) <= keep:
+        return ToolResult(out.decode("utf-8", errors="replace"))
+    text = out[:keep].decode("utf-8", errors="replace")
+    text += f"\n…[truncated {len(out) - keep + size - len(data)} bytes]"
     return ToolResult(text)
 
 

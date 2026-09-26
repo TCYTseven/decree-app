@@ -1,12 +1,16 @@
+import { stripPrivateKeywords } from "../../../core/json-schema.js";
 import type { JSONSchema, ToolSpec } from "../../../core/types.js";
 import { SERVER_KINDS, type PyContext } from "../context.js";
 import { pyLiteral, pyStr, pyText } from "../py.js";
 import { docstring } from "./config.js";
 
-/** The input_schema sent to the API for a client tool (always an object schema). */
+/**
+ * The input_schema sent to the API for a client tool (always an object schema), without decree-private keywords
+ * (`x-allow-flags`, ...): the binding carries allowFlags instead.
+ */
 export function apiInputSchema(tool: ToolSpec): JSONSchema {
   if (SERVER_KINDS.has(tool.kind) || tool.kind === "memory") return {};
-  const schema = tool.inputSchema ?? {};
+  const schema = stripPrivateKeywords(tool.inputSchema ?? {});
   if (schema.type === "object") return schema.properties ? schema : { ...schema, properties: {} };
   return { type: "object", properties: {}, ...schema, ...(schema.type ? {} : { type: "object" }) };
 }
