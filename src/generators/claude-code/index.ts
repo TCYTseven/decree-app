@@ -3,15 +3,21 @@ import { withFrontmatter } from "../common/frontmatter.js";
 import { codeBlock, demoteHeadings, inlineCode, oneLine, renderTable } from "../common/markdown.js";
 import { displayShellCommand, envDefault, httpTools, needsApproval, shellPlaceholders, toolEnvRefs } from "../common/spec-utils.js";
 import {
+  allowRulesFor,
   bashRules,
   claudeModelAlias,
   claudeToolsFor,
   claudeToolsForNames,
+  decisionsViaMcp,
+  DECISIONS_BASH_RULE,
+  DECISIONS_SCRIPT,
   derivePermissions,
   FALLBACK_TOOLS,
   mcpServerName,
   mcpToolName,
+  type MappingOptions,
 } from "./mapping.js";
+import { decisionsJson, decisionsScriptMjs } from "../common/decisions.js";
 
 export * from "./mapping.js";
 
@@ -113,11 +119,22 @@ function skillsFor(spec: HarnessSpec, toolNames: string[] | null): string[] {
   const out: string[] = [];
   if (shellTools(spec).some(has)) out.push("run-checks");
   for (const g of apiGroups(spec)) if (g.tools.some(has)) out.push(g.skill);
+  if (spec.tools.some((t) => t.kind === "decisions" && has(t))) out.push("decisions");
   return out;
 }
 
+function decisionsToolOf(spec: HarnessSpec): ToolSpec | undefined {
+  return spec.tools.find((t) => t.kind === "decisions");
+}
+
+/** How Claude Code gets decisions: the primary call, and the script fallback when that call is the MCP tool. */
+function decisionsHowTo(spec: HarnessSpec, t: ToolSpec, mo: MappingOptions): { primary: string; fallback?: string } {
+  const script = `run \`node ${DECISIONS_SCRIPT} <paths...>\``;
+  return mo.decisionsViaMcp ? { primary: `call ${inlineCode(mcpToolName(spec, t))}`, fallback: script } : { primary: script };
+}
+
 /** "How the harness tool names map to Claude Code" note appended to agent prompts. */
-function toolMappingNote(spec: HarnessSpec, toolNames: string[]): string {
+function toolMappingNote(spec: HarnessSpec, toolNames: string[], mo: MappingOptions): string {
   const lines: string[] = [];
   for (const t of spec.tools) {
     if (!toolNames.includes(t.name)) continue;
@@ -132,8 +149,13 @@ function toolMappingNote(spec: HarnessSpec, toolNames: string[]): string {
       case "memory":
         lines.push(`- \`${t.name}\`: use your agent memory directory (\`memory: project\`) for durable notes.`);
         break;
+      case "decisions": {
+        const how = decisionsHowTo(spec, t, mo);
+        lines.push(`- \`${t.name}\`: ${how.primary}${how.fallback ? ` (or ${how.fallback} with Bash when the MCP server is not running)` : " with Bash"}. Skill \`decisions\` has the details.`);
+        break;
+      }
       default: {
-        const mapped = claudeToolsFor(spec, t);
+        const mapped = claudeToolsFor(spec, t, mo);
         if (mapped.length) lines.push(`- \`${t.name}\`: use ${mapped.join(" / ")}${ask}.`);
       }
     }
@@ -156,7 +178,7 @@ function truncatePrompt(prompt: string, budget: number): { text: string; truncat
   return { text: fences % 2 === 1 ? `${text}\n\`\`\`` : text, truncated: true };
 }
 
-function renderClaudeMd(spec: HarnessSpec, mainAgent: string, withMcp: boolean): string {
+function renderClaudeMd(spec: HarnessSpec, mainAgent: string, withMcp: boolean, mo: MappingOptions): string {
   const out: string[] = [];
   out.push(`# ${oneLine(spec.displayName)}`, "", oneLine(spec.description), "", `Goal: ${oneLine(spec.goal)}`, "");
 
@@ -184,6 +206,19 @@ function renderClaudeMd(spec: HarnessSpec, mainAgent: string, withMcp: boolean):
       );
     }
     out.push("");
+  }
+
+  const dt = decisionsToolOf(spec);
+  if (dt) {
+    const how = decisionsHowTo(spec, dt, mo);
+    // Only how to look decisions up: listing them here would load every rule into every session.
+    out.push(
+      "## Team decisions",
+      "",
+      `- Before you edit or create code, ${how.primary} with the files or directories you will change. It returns only the live decisions that govern those paths.${how.fallback ? ` If the MCP server is not running, ${how.fallback} instead.` : ""}`,
+      "- Follow them and cite the decision id when one constrains your change. If a request conflicts with a live decision, stop and tell the user which decision it conflicts with.",
+      "",
+    );
   }
 
   const g = spec.guardrails;
@@ -219,8 +254,9 @@ function renderClaudeMd(spec: HarnessSpec, mainAgent: string, withMcp: boolean):
 function agentFile(
   spec: HarnessSpec,
   a: { name: string; description: string; systemPrompt: string; tools: string[]; model: string | undefined; effort: string },
+  mo: MappingOptions,
 ): string {
-  let tools = claudeToolsForNames(spec, a.tools);
+  let tools = claudeToolsForNames(spec, a.tools, mo);
   if (tools.length === 0) tools = FALLBACK_TOOLS;
   const usesMemory = spec.tools.some((t) => t.kind === "memory" && a.tools.includes(t.name));
   const skills = skillsFor(spec, a.tools);
@@ -234,7 +270,7 @@ function agentFile(
     skills: skills.length ? skills : undefined,
     memory: usesMemory ? "project" : undefined,
   };
-  return withFrontmatter(fm, a.systemPrompt.trim() + "\n" + toolMappingNote(spec, a.tools));
+  return withFrontmatter(fm, a.systemPrompt.trim() + "\n" + toolMappingNote(spec, a.tools, mo));
 }
 
 function subagentName(s: SubagentSpec): string {
@@ -372,22 +408,58 @@ function renderApiSkill(spec: HarnessSpec, g: ApiGroup, withMcp: boolean): strin
   );
 }
 
+function renderDecisionsSkill(spec: HarnessSpec, t: ToolSpec, mo: MappingOptions): string {
+  const n = spec.decisions?.filter((d) => d.status === "live").length ?? 0;
+  const out: string[] = [
+    "# Team decisions",
+    "",
+    `This repository records ${n} live decision${n === 1 ? "" : "s"} (ADRs, post-mortem lessons, repo rules). Each one governs some paths. Look up the ones that govern the files you are about to change instead of guessing.`,
+    "",
+    "## Look them up",
+    "",
+  ];
+  if (mo.decisionsViaMcp) {
+    out.push(`Call ${inlineCode(mcpToolName(spec, t))} with \`{"paths": [...]}\`. When the MCP server is not running, run the script from the repository root:`, "");
+  } else {
+    out.push("Run the script from the repository root with the files or directories you will change:", "");
+  }
+  out.push(
+    codeBlock(`node ${DECISIONS_SCRIPT} src/db/users.ts migrations/`, "sh"),
+    "",
+    "Add `--proposed` to also see proposed decisions that nobody has confirmed yet.",
+    "",
+    "## Use them",
+    "",
+    "- Follow the live decisions it prints, and cite the decision id when one constrains your change.",
+    "- If the request conflicts with a live decision, stop and tell the user which decision it conflicts with. Do not work around it.",
+    "- Proposed decisions are drafts: mention a conflict with one, but it does not block the change.",
+  );
+  return withFrontmatter(
+    {
+      name: "decisions",
+      description: oneLine("Look up the team decisions (ADRs, post-mortem lessons, repo rules) that govern the files you are about to edit. Use before changing code."),
+      "allowed-tools": mo.decisionsViaMcp ? [mcpToolName(spec, t), DECISIONS_BASH_RULE] : [DECISIONS_BASH_RULE],
+    },
+    out.join("\n"),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // commands
 // ---------------------------------------------------------------------------
 
-function readOnlyAllowed(spec: HarnessSpec, names: string[] | null): string[] {
+function readOnlyAllowed(spec: HarnessSpec, names: string[] | null, mo: MappingOptions): string[] {
   const out: string[] = [];
   for (const t of spec.tools) {
     if (names && !names.includes(t.name)) continue;
     if (isAsk(spec, t) || !t.readOnly) continue;
-    const rules = t.kind === "shell" ? bashRules(t) : claudeToolsFor(spec, t);
+    const rules = allowRulesFor(spec, t, mo);
     for (const r of rules) if (!out.includes(r)) out.push(r);
   }
   return out;
 }
 
-function renderCommands(spec: HarnessSpec, main: string): GeneratedFile[] {
+function renderCommands(spec: HarnessSpec, main: string, mo: MappingOptions): GeneratedFile[] {
   const files: GeneratedFile[] = [];
   const cmd = (name: string, fm: Record<string, unknown>, body: string) =>
     files.push({ path: `.claude/commands/${name}.md`, content: withFrontmatter(fm, body) });
@@ -428,7 +500,7 @@ function renderCommands(spec: HarnessSpec, main: string): GeneratedFile[] {
 
   if (spec.subagents.length) {
     const names = [...new Set(spec.subagents.flatMap((s) => s.tools))];
-    const allowed = readOnlyAllowed(spec, names);
+    const allowed = readOnlyAllowed(spec, names, mo);
     cmd(
       "triage",
       {
@@ -466,7 +538,7 @@ function renderCommands(spec: HarnessSpec, main: string): GeneratedFile[] {
       if (x.rubric) lines.push(`- Rubric: ${neutralizeSkillText(oneLine(x.rubric))}`);
       lines.push("");
     }
-    const allowed = readOnlyAllowed(spec, null);
+    const allowed = readOnlyAllowed(spec, null, mo);
     cmd(
       "smoke-test",
       {
@@ -484,8 +556,8 @@ function renderCommands(spec: HarnessSpec, main: string): GeneratedFile[] {
 // settings.json / .mcp.json / README.md
 // ---------------------------------------------------------------------------
 
-function renderSettings(spec: HarnessSpec, withMcp: boolean): string {
-  const perms = derivePermissions(spec);
+function renderSettings(spec: HarnessSpec, withMcp: boolean, mo: MappingOptions): string {
+  const perms = derivePermissions(spec, mo);
   const settings: Record<string, unknown> = {
     $schema: "https://json.schemastore.org/claude-code-settings.json",
     permissions: perms,
@@ -512,7 +584,7 @@ function renderMcpJson(spec: HarnessSpec, opts: GenerateOptions): string {
   return JSON.stringify({ mcpServers: { [mcpServerName(spec)]: server } }, null, 2) + "\n";
 }
 
-function renderReadme(spec: HarnessSpec, opts: GenerateOptions, main: string, files: GeneratedFile[], withMcp: boolean): string {
+function renderReadme(spec: HarnessSpec, opts: GenerateOptions, main: string, files: GeneratedFile[], withMcp: boolean, mo: MappingOptions): string {
   const dir = harnessDir(opts);
   const out: string[] = [
     `# ${oneLine(spec.displayName)} for Claude Code`,
@@ -530,10 +602,24 @@ function renderReadme(spec: HarnessSpec, opts: GenerateOptions, main: string, fi
   ];
   if (withMcp) {
     const envs = toolEnvRefs(spec.tools);
+    const served = [httpTools(spec).length ? "The API tools" : "", mo.decisionsViaMcp ? "`get_decisions`" : ""].filter(Boolean).join(" and ");
     out.push(
       "### MCP server",
       "",
-      `The API tools are served by the generated MCP server (\`${dir}/mcp-server\`). \`.mcp.json\` starts it with \`npx --prefix ${dir}/mcp-server tsx ${dir}/mcp-server/src/server.ts\` from the repository root, which assumes the default output dir \`${dir}/\`; edit the path if you generated elsewhere. Install its dependencies once (\`cd ${dir}/mcp-server && npm install\`) and export ${envs.map((e) => `\`${e}\``).join(", ")} before starting \`claude\`. Approve the server when Claude Code asks (or keep \`enabledMcpjsonServers\` in settings).`,
+      `${served} ${served.includes(" and ") ? "are" : "is"} served by the generated MCP server (\`${dir}/mcp-server\`). \`.mcp.json\` starts it with \`npx --prefix ${dir}/mcp-server tsx ${dir}/mcp-server/src/server.ts\` from the repository root, which assumes the default output dir \`${dir}/\`; edit the path if you generated elsewhere. Install its dependencies once (\`cd ${dir}/mcp-server && npm install\`)${envs.length ? ` and export ${envs.map((e) => `\`${e}\``).join(", ")}` : ""} before starting \`claude\`. Approve the server when Claude Code asks (or keep \`enabledMcpjsonServers\` in settings).`,
+      "",
+    );
+  }
+  const dt = decisionsToolOf(spec);
+  if (dt) {
+    out.push(
+      "### Team decisions",
+      "",
+      `\`CLAUDE.md\` tells Claude to look up the decisions that govern the files it is about to change, instead of listing every decision. ${
+        mo.decisionsViaMcp
+          ? `It calls ${inlineCode(mcpToolName(spec, dt))}; the \`decisions\` skill's script is the fallback when the MCP server is not running.`
+          : `It runs the \`decisions\` skill's script (\`node ${DECISIONS_SCRIPT} <paths...>\`), which needs only Node.js.`
+      } The data is \`.claude/skills/decisions/decisions.json\`, written from \`decree.json\`: change decisions with \`npx decree-harness decisions\` and regenerate.`,
       "",
     );
   }
@@ -541,10 +627,12 @@ function renderReadme(spec: HarnessSpec, opts: GenerateOptions, main: string, fi
   const describe = (p: string): string => {
     if (p === "CLAUDE.md") return "Project memory, loaded every session: overview, working rules, commands, safety.";
     if (p === ".claude/settings.json") return "Permissions: allow read-only tools and checks, ask before destructive actions, deny blocked commands and `.env` reads.";
-    if (p === ".mcp.json") return "Registers the generated MCP server that exposes the API tools.";
+    if (p === ".mcp.json") return `Registers the generated MCP server that exposes ${httpTools(spec).length ? "the API tools" : "get_decisions"}.`;
     if (p === "README.md") return "This file.";
     if (p === `.claude/agents/${main}.md`) return "Main agent (the full system prompt). Invoke it as a subagent or run `claude --agent " + main + "`.";
     if (p.startsWith(".claude/agents/")) return "Subagent.";
+    if (p === ".claude/skills/decisions/get-decisions.mjs") return "Prints the live decisions that govern the paths you pass (used by the `decisions` skill).";
+    if (p === ".claude/skills/decisions/decisions.json") return "The team decisions from `decree.json`, read by the script.";
     if (p.startsWith(".claude/skills/")) return "Skill: loaded on demand when its description matches the task.";
     if (p.startsWith(".claude/commands/")) return `Slash command \`/${p.slice(".claude/commands/".length, -3)}\`.`;
     return "";
@@ -566,7 +654,10 @@ function renderReadme(spec: HarnessSpec, opts: GenerateOptions, main: string, fi
     renderTable(
       ["Harness tool", "Claude Code", "Permission"],
       spec.tools.map((t) => {
-        const mapped = t.kind === "memory" ? "agent `memory: project`" : claudeToolsFor(spec, t).map((c) => inlineCode(c)).join(", ");
+        const mapped =
+          t.kind === "memory"
+            ? "agent `memory: project`"
+            : (t.kind === "decisions" ? allowRulesFor(spec, t, mo) : claudeToolsFor(spec, t, mo)).map((c) => inlineCode(c)).join(", ");
         const perm = t.kind === "memory" ? "" : isAsk(spec, t) ? "ask" : "allow";
         return [inlineCode(t.name), mapped, perm];
       }),
@@ -581,11 +672,12 @@ function renderReadme(spec: HarnessSpec, opts: GenerateOptions, main: string, fi
 // ---------------------------------------------------------------------------
 
 export function generateClaudeCode(spec: HarnessSpec, opts: GenerateOptions): GeneratedFile[] {
-  const withMcp = httpTools(spec).length > 0;
+  const mo: MappingOptions = { decisionsViaMcp: decisionsViaMcp(spec, opts) };
+  const withMcp = httpTools(spec).length > 0 || !!mo.decisionsViaMcp;
   const main = mainAgentName(spec);
   const files: GeneratedFile[] = [];
 
-  files.push({ path: "CLAUDE.md", content: renderClaudeMd(spec, main, withMcp) });
+  files.push({ path: "CLAUDE.md", content: renderClaudeMd(spec, main, withMcp, mo) });
 
   files.push({
     path: `.claude/agents/${main}.md`,
@@ -596,7 +688,7 @@ export function generateClaudeCode(spec: HarnessSpec, opts: GenerateOptions): Ge
       tools: spec.tools.map((t) => t.name),
       model: spec.model.id,
       effort: spec.model.effort,
-    }),
+    }, mo),
   });
   const seen = new Set([main]);
   for (const s of spec.subagents) {
@@ -612,19 +704,27 @@ export function generateClaudeCode(spec: HarnessSpec, opts: GenerateOptions): Ge
         tools: s.tools,
         model: s.model ?? spec.model.subagentId,
         effort: s.effort ?? "medium",
-      }),
+      }, mo),
     });
   }
 
   if (shellTools(spec).length) files.push({ path: ".claude/skills/run-checks/SKILL.md", content: renderRunChecksSkill(spec) });
   for (const g of apiGroups(spec)) files.push({ path: `.claude/skills/${g.skill}/SKILL.md`, content: renderApiSkill(spec, g, withMcp) });
+  const dt = decisionsToolOf(spec);
+  if (dt) {
+    files.push(
+      { path: ".claude/skills/decisions/SKILL.md", content: renderDecisionsSkill(spec, dt, mo) },
+      { path: DECISIONS_SCRIPT, content: decisionsScriptMjs(), executable: true },
+      { path: ".claude/skills/decisions/decisions.json", content: decisionsJson(spec) },
+    );
+  }
 
-  files.push(...renderCommands(spec, main));
-  files.push({ path: ".claude/settings.json", content: renderSettings(spec, withMcp) });
+  files.push(...renderCommands(spec, main, mo));
+  files.push({ path: ".claude/settings.json", content: renderSettings(spec, withMcp, mo) });
   if (withMcp) files.push({ path: ".mcp.json", content: renderMcpJson(spec, opts) });
 
   const readmePlaceholder: GeneratedFile = { path: "README.md", content: "" };
   files.push(readmePlaceholder);
-  readmePlaceholder.content = renderReadme(spec, opts, main, files, withMcp).replace(/\n+$/, "\n");
+  readmePlaceholder.content = renderReadme(spec, opts, main, files, withMcp, mo).replace(/\n+$/, "\n");
   return files;
 }

@@ -1,5 +1,8 @@
 import path from "node:path";
-import type { HarnessSpec, LLM, ProjectProfile, Target } from "../core/types.js";
+import { existsSync } from "node:fs";
+import type { Decision, HarnessSpec, LLM, ProjectProfile, Target } from "../core/types.js";
+import { extractDecisions } from "../decisions/extract.js";
+import { mergeDecisions } from "../decisions/merge.js";
 import { scanProject } from "../scanner/index.js";
 import { planHarness } from "../planner/index.js";
 import { generateTargets, TARGET_DIRS } from "../generators/index.js";
@@ -138,6 +141,7 @@ export function profileSummary(profile: ProjectProfile): string {
   if (profile.database) rows.push(["Database", `${profile.database.kind}${profile.database.models.length ? c.dim(` (${plural(profile.database.models.length, "model")})`) : ""}`]);
   if (profile.cli) rows.push(["CLI", profile.cli.bin]);
   rows.push(["Agent config", agentCfg.length ? agentCfg.join(", ") : c.dim("none")]);
+  if (profile.decisionSources?.length) rows.push(["Decisions", `${plural(profile.decisionSources.length, "file")} ${c.dim("(ADRs, rules, post-mortems)")}`]);
   if (profile.stats.truncated) rows.push(["Files", `${profile.stats.files} ${c.yellow("(scan stopped early: very large tree)")}`]);
   const w = Math.max(...rows.map(([k]) => k.length));
   return rows.map(([k, v]) => `${c.dim(k.padEnd(w))}  ${v}`).join("\n");
@@ -152,6 +156,24 @@ export async function scanStep(root: string, opts: { save?: boolean } = {}): Pro
   );
   if (opts.save !== false) await saveProfile(root, profile);
   return profile;
+}
+
+/**
+ * Extract the team's decisions (always offline) and merge them into the ones an existing decree.json holds, so a
+ * re-plan keeps what the team confirmed or superseded.
+ */
+export async function decisionsStep(root: string, previous?: Decision[]): Promise<Decision[]> {
+  const { decisions } = await extractDecisions(root);
+  return mergeDecisions(previous ?? [], decisions, (f) => existsSync(path.join(root, f))).decisions;
+}
+
+/** "Found 12 decisions: 4 live, 8 proposed. Confirm with `decree-harness decisions confirm`." */
+export function decisionsFoundLine(decisions: Decision[], self: string): string | undefined {
+  if (!decisions.length) return undefined;
+  const count = (st: Decision["status"]) => decisions.filter((d) => d.status === st).length;
+  const parts = [`${count("live")} live`, `${count("proposed")} proposed`, ...(count("superseded") ? [`${count("superseded")} superseded`] : [])];
+  const tail = count("proposed") ? ` Confirm with \`${self} decisions confirm\`.` : "";
+  return `Found ${plural(decisions.length, "decision")}: ${parts.join(", ")}.${tail}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +214,7 @@ export function makeLLM(apiKey: string, model?: string): LLM {
 
 export async function planStep(
   profile: ProjectProfile,
-  opts: { goal: string; targets: Target[]; llm?: LLM; model?: string; critique?: boolean },
+  opts: { goal: string; targets: Target[]; llm?: LLM; model?: string; critique?: boolean; decisions?: Decision[] },
 ): Promise<HarnessSpec> {
   const who = opts.llm ? `Claude ${c.dim(`(${opts.llm.model})`)}` : "offline heuristics";
   return withSpinner(
@@ -204,6 +226,7 @@ export async function planStep(
         llm: opts.llm,
         model: opts.model,
         critique: opts.critique,
+        decisions: opts.decisions,
         onProgress: (m) => spin.message(m),
       }),
     (spec) =>
@@ -269,6 +292,8 @@ export function toolTarget(t: HarnessSpec["tools"][number]): string {
     case "list_files":
     case "search":
       return t.fs ? `${t.fs.root}` : ".";
+    case "decisions":
+      return "decree.json decisions, by path";
     default:
       return t.source === "builtin" ? "server tool" : (t.source ?? "");
   }

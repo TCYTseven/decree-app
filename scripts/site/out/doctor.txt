@@ -2,8 +2,9 @@ T   decree  v0.1.0 · doctor
 |
 |  ✓ Node.js            v22.22.2
 |  ▲ Anthropic API key  not set
-|                       export ANTHROPIC_API_KEY=… (or add it to .env). Needed for Claude planning, chat, run and eval.
-|  ✓ decree.json        18 tools, 2 subagents, 9 evals
+|                       export ANTHROPIC_API_KEY=sk-ant-... (or add it to .env). Needed to plan
+|                       with Claude, chat, run and eval.
+|  ✓ decree.json        18 tools, 0 subagents, 12 evals
 |  ▲ Tool env vars      missing ACME_API_TOKEN
 |                       Tools that need them will fail at runtime. Set them in your shell or .env.
 |  ✓ Generated code     agent/ (typescript, python, mcp, claude-code)

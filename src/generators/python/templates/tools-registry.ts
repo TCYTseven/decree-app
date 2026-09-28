@@ -47,6 +47,7 @@ function toolDef(tool: ToolSpec): string {
 export function toolsRegistryPy(ctx: PyContext): string {
   const { has } = ctx;
   const imports = [
+    has.decisions ? "from .decisions import get_decisions" : "",
     has.fs ? "from .fs import list_files, read_file, search, write_file" : "",
     has.http ? "from .http import call_http" : "",
     has.memory ? "from .memory import MemoryStore" : "",
@@ -62,6 +63,7 @@ export function toolsRegistryPy(ctx: PyContext): string {
     dispatch.push(`    if tool.kind == "list_files":\n        return list_files(tool.binding, args, ctx.project_root)`);
     dispatch.push(`    if tool.kind == "search":\n        return search(tool.binding, args, ctx.project_root)`);
   }
+  if (has.decisions) dispatch.push(`    if tool.kind == "decisions":\n        return get_decisions(args, ctx.project_root)`);
   if (has.memory) {
     dispatch.push(`    if tool.kind == "memory":
         if ctx.memory is None:
@@ -212,7 +214,7 @@ def execute_tool(tool: ToolDef, args: Any, ctx: ToolContext) -> ToolResult:
         problem = validate_input(tool.input_schema, args)
         if problem:
             return ToolResult.error(problem)
-    if ctx.dry_run:
+    if ctx.dry_run${has.decisions ? ' and tool.kind != "decisions"' : ""}:
         preview = json.dumps(args, ensure_ascii=False, sort_keys=True)
         return ToolResult(redact(f"[dry run] {tool.name} was not executed. Input: {preview}"))
     try:

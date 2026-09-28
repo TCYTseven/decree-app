@@ -10,6 +10,7 @@ import { envExample, gitignore, packageJson, tsconfigJson } from "./templates/pr
 import { readmeMd } from "./templates/readme.js";
 import { fsTs, httpTs, memoryTs, shellTs } from "./templates/tool-helpers.js";
 import { toolsIndexTs } from "./templates/tools-index.js";
+import { decisionsJson, decisionsModuleTs } from "../common/decisions.js";
 
 /**
  * Render the standalone TypeScript harness: a small npm package with an agent
@@ -47,6 +48,10 @@ export function generateTypescript(spec: HarnessSpec, opts: GenerateOptions): Ge
   if (needsShell) files.push(ts("src/tools/shell.ts", shellTs()));
   if (kinds.some(isFsKind)) files.push(ts("src/tools/fs.ts", fsTs()));
   if (m.kinds.has("memory")) files.push(ts("src/tools/memory.ts", memoryTs()));
+  if (m.kinds.has("decisions")) {
+    files.push(ts("src/tools/decisions.ts", decisionsModuleTs("../config.js")));
+    files.push({ path: "decisions.json", content: decisionsJson(spec) });
+  }
   if (m.subagents.length > 0) files.push(ts("src/subagents.ts", subagentsTs(m)));
 
   return files;

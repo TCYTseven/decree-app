@@ -1,4 +1,4 @@
-import type { HarnessSpec, ToolSpec } from "../../core/types.js";
+import type { GenerateOptions, HarnessSpec, ToolSpec } from "../../core/types.js";
 import { needsApproval, shellCommandPrefix } from "../common/spec-utils.js";
 
 /** Read-only fallback when a spec agent maps to zero Claude Code tools (omitting `tools` would inherit ALL tools). */
@@ -10,13 +10,33 @@ export function mcpServerName(spec: HarnessSpec): string {
   return s || "decree-agent";
 }
 
+/** Script that answers get_decisions in Claude Code without the MCP server (node, no dependencies). */
+export const DECISIONS_SCRIPT = ".claude/skills/decisions/get-decisions.mjs";
+/** The one Bash command the decisions script needs: narrow enough to allow. */
+export const DECISIONS_BASH_RULE = `Bash(node ${DECISIONS_SCRIPT}:*)`;
+
+export interface MappingOptions {
+  /** get_decisions is served by the generated MCP server (wired in .mcp.json) rather than only by the script. */
+  decisionsViaMcp?: boolean;
+}
+
+/**
+ * How Claude Code reaches get_decisions. When the MCP server is generated alongside (or already wired for API
+ * tools), it is the MCP tool `mcp__<server>__get_decisions`; otherwise the `decisions` skill's script, run with Bash.
+ * The skill and script are generated either way, as the fallback when the MCP server is not running.
+ */
+export function decisionsViaMcp(spec: HarnessSpec, opts: Pick<GenerateOptions, "targets">): boolean {
+  if (!spec.tools.some((t) => t.kind === "decisions")) return false;
+  return opts.targets ? opts.targets.includes("mcp") : spec.tools.some((t) => t.kind === "http" && t.http);
+}
+
 /** Claude Code tool name for an MCP tool served by the generated MCP server. */
 export function mcpToolName(spec: HarnessSpec, tool: ToolSpec): string {
   return `mcp__${mcpServerName(spec)}__${tool.name}`;
 }
 
 /** Map one harness tool to the Claude Code tools that provide the same capability. */
-export function claudeToolsFor(spec: HarnessSpec, tool: ToolSpec): string[] {
+export function claudeToolsFor(spec: HarnessSpec, tool: ToolSpec, o: MappingOptions = {}): string[] {
   switch (tool.kind) {
     case "read_file":
       return ["Read"];
@@ -37,17 +57,26 @@ export function claudeToolsFor(spec: HarnessSpec, tool: ToolSpec): string[] {
       return [];
     case "http":
       return [mcpToolName(spec, tool)];
+    case "decisions":
+      return o.decisionsViaMcp ? [mcpToolName(spec, tool)] : ["Bash"];
     default:
       return [];
   }
 }
 
+/** Permission rules that let Claude Code use a read-only harness tool without asking. */
+export function allowRulesFor(spec: HarnessSpec, tool: ToolSpec, o: MappingOptions = {}): string[] {
+  if (tool.kind === "shell") return bashRules(tool);
+  if (tool.kind === "decisions") return o.decisionsViaMcp ? [mcpToolName(spec, tool), DECISIONS_BASH_RULE] : [DECISIONS_BASH_RULE];
+  return claudeToolsFor(spec, tool, o);
+}
+
 /** Map a list of harness tool names to a de-duplicated, spec-ordered list of Claude Code tools. */
-export function claudeToolsForNames(spec: HarnessSpec, names: string[]): string[] {
+export function claudeToolsForNames(spec: HarnessSpec, names: string[], o: MappingOptions = {}): string[] {
   const out: string[] = [];
   for (const t of spec.tools) {
     if (!names.includes(t.name)) continue;
-    for (const c of claudeToolsFor(spec, t)) if (!out.includes(c)) out.push(c);
+    for (const c of claudeToolsFor(spec, t, o)) if (!out.includes(c)) out.push(c);
   }
   return out;
 }
@@ -141,7 +170,7 @@ function push(list: string[], ...items: string[]) {
  *  - secrets (.env files) -> deny Read
  * Deny beats ask beats allow in Claude Code, so overlaps resolve safely.
  */
-export function derivePermissions(spec: HarnessSpec): Permissions {
+export function derivePermissions(spec: HarnessSpec, o: MappingOptions = {}): Permissions {
   const p: Permissions = { allow: [], ask: [], deny: [] };
   for (const t of spec.tools) {
     const ask = needsApproval(t, spec.guardrails.approvalMode) || t.destructive;
@@ -172,6 +201,9 @@ export function derivePermissions(spec: HarnessSpec): Permissions {
         break;
       case "http":
         push(list, mcpToolName(spec, t));
+        break;
+      case "decisions":
+        push(list, ...allowRulesFor(spec, t, o));
         break;
       default:
         break;

@@ -84,6 +84,7 @@ export function readmeMd(m: TsModel): string {
     ["src/tools/index.ts", "tool registry: definitions, flags, executors"],
   ];
   if (m.subagents.length > 0) layout.push(["src/subagents.ts", "delegate_to_* tools"]);
+  if (m.kinds.has("decisions")) layout.push(["src/tools/decisions.ts", "get_decisions: decisions that govern the given paths"], ["decisions.json", "the team decisions, written from decree.json"]);
   layout.push(["src/evals.ts", "eval runner"]);
   const width = Math.max(...layout.map(([p]) => p.length));
   for (const [p, what] of layout) push(`${p.padEnd(width)}  ${what}`);

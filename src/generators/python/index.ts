@@ -15,6 +15,8 @@ import { toolsInitPy } from "./templates/tools-init.js";
 import { toolsMemoryPy } from "./templates/tools-memory.js";
 import { toolsRegistryPy } from "./templates/tools-registry.js";
 import { toolsShellPy } from "./templates/tools-shell.js";
+import { docstring } from "./templates/config.js";
+import { decisionsJson, decisionsModulePy } from "../common/decisions.js";
 
 export { pythonPackageName } from "./py.js";
 
@@ -43,6 +45,10 @@ export function generatePython(spec: HarnessSpec, opts: GenerateOptions): Genera
   if (has.shell) files.push([`${pkg}/tools/shell.py`, toolsShellPy(ctx)]);
   if (has.fs) files.push([`${pkg}/tools/fs.py`, toolsFsPy(ctx)]);
   if (has.memory) files.push([`${pkg}/tools/memory.py`, toolsMemoryPy(ctx)]);
+  if (has.decisions) {
+    files.push([`${pkg}/tools/decisions.py`, decisionsModulePy(docstring(ctx, "get_decisions: the team decisions that govern the paths the agent is about to touch."))]);
+    files.push([`${pkg}/decisions.json`, decisionsJson(spec)]);
+  }
   if (has.subagents) files.push([`${pkg}/subagents.py`, subagentsPy(ctx)]);
   files.push(
     [`${pkg}/agent.py`, agentPy(ctx)],

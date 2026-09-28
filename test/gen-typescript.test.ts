@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { GeneratedFile, HarnessSpec, ToolSpec } from "../src/core/types.js";
 import { generateTypescript } from "../src/generators/typescript/index.js";
 import { sampleSpec } from "./helpers/sample-spec.js";
+import { withDecisions } from "../src/decisions/tool.js";
 
 const TMP = path.resolve("test/.tmp/gen-typescript");
 const OPTS = { outDir: "agent", decreeVersion: "0.1.0" };
@@ -113,6 +114,10 @@ function nastySpec(): HarnessSpec {
 
 const VARIANTS: Record<string, () => HarnessSpec> = {
   sample: () => sampleSpec(),
+  decisions: () =>
+    withDecisions(sampleSpec(), [
+      { id: "adr-0001-db", title: "Database", constraint: "Only src/db writes SQL.", status: "live", governs: ["src/db/**"], source: "docs/adr/0001-db.md" },
+    ]),
   "no-subagents": () => sampleSpec({ subagents: [] }),
   "no-http": () => {
     const base = sampleSpec();

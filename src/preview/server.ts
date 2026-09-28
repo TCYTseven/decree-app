@@ -6,6 +6,7 @@ import path from "node:path";
 import type { EvalResult, GeneratedFile, HarnessSpec, LLM, RunOptions, RunResult, RuntimeEvent, Target } from "../core/types.js";
 import { projectPaths, readDotEnv, writeSchema } from "../core/config.js";
 import { stringifySpec, validateSpec } from "../core/spec.js";
+import { withDecisions } from "../decisions/tool.js";
 import { writeFiles, type WriteReport } from "../core/writer.js";
 import { generateTargets } from "../generators/index.js";
 import { DECREE_VERSION, DEFAULT_OUT_DIR, SPEC_FILENAME } from "../version.js";
@@ -70,7 +71,7 @@ class HttpError extends Error {
 
 const MAX_BODY = 2 * 1024 * 1024;
 /** Top-level decree.json fields the dashboard may patch. */
-const PATCHABLE = new Set(["displayName", "description", "goal", "systemPrompt", "model", "tools", "subagents", "guardrails", "context", "evals", "targets", "env"]);
+const PATCHABLE = new Set(["displayName", "description", "goal", "systemPrompt", "model", "tools", "subagents", "guardrails", "context", "evals", "targets", "env", "decisions"]);
 
 export const sha = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
 
@@ -147,7 +148,9 @@ export async function patchSpecFile(
   const next = { ...json, ...patch };
   const res = validateSpec(next);
   if (!res.ok) return { ok: false, status: 422, code: "invalid", hash, errors: res.errors };
-  const content = stringifySpec(res.spec);
+  // Decisions changed from the dashboard: make sure the harness serves them (get_decisions + its prompt line).
+  const saved = "decisions" in patch ? withDecisions(res.spec) : res.spec;
+  const content = stringifySpec(saved);
   if (content !== raw) {
     await fsp.mkdir(paths.cacheDir, { recursive: true });
     await fsp.writeFile(path.join(paths.cacheDir, "decree.backup.json"), raw, "utf8");
@@ -158,7 +161,7 @@ export async function patchSpecFile(
       await writeSchema(root).catch(() => undefined);
     }
   }
-  return { ok: true, spec: res.spec, warnings: res.warnings, hash: sha(content) };
+  return { ok: true, spec: saved, warnings: res.warnings, hash: sha(content) };
 }
 
 // ---------------------------------------------------------------------------

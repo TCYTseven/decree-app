@@ -113,6 +113,8 @@ export interface ProjectProfile {
   tree: string; // depth-limited ascii tree
   keyFiles: KeyFile[];
   git?: { remote?: string; branch?: string };
+  /** Files that hold team decisions (ADRs, agent rules files, post-mortems); set only when some exist. */
+  decisionSources?: string[];
   stats: { files: number; dirs: number; truncated: boolean; scanMs: number };
 }
 
@@ -131,7 +133,8 @@ export type ToolKind =
   | "search" // grep file contents under an allowed root
   | "web_search" // Anthropic server tool
   | "web_fetch" // Anthropic server tool
-  | "memory"; // persistent notes in a local directory
+  | "memory" // persistent notes in a local directory
+  | "decisions"; // serve the team decisions (spec.decisions) that govern the given paths
 
 export interface HttpBinding {
   method: ApiEndpoint["method"];
@@ -210,6 +213,26 @@ export interface ContextStrategy {
 
 export type Target = "typescript" | "python" | "claude-code" | "mcp";
 
+/** live: agents must follow it. proposed: extracted or drafted, waiting for a human to confirm. superseded: kept for history. */
+export type DecisionStatus = "live" | "proposed" | "superseded";
+
+/**
+ * An architectural decision the team already made (an ADR, a post-mortem lesson, a rule from CLAUDE.md/AGENTS.md).
+ * The `get_decisions` tool serves only the live decisions whose `governs` globs match the paths an agent is about
+ * to touch, instead of loading every rule into every session.
+ */
+export interface Decision {
+  id: string; // stable slug, e.g. "adr-0003-use-postgres" or "rule-claude-md-never-write-raw-sql"
+  title: string;
+  constraint: string; // the rule an agent must follow, 1-3 sentences
+  status: DecisionStatus;
+  governs: string[]; // globs relative to the repo root; "**" = the whole repo
+  source: string; // "docs/adr/0003-use-postgres.md" or "CLAUDE.md:14"
+  owner?: string;
+  supersededBy?: string; // id of the decision that replaced this one
+  rationale?: string;
+}
+
 export interface HarnessSpec {
   $schema?: string;
   version: 1;
@@ -231,6 +254,8 @@ export interface HarnessSpec {
   evals: EvalCase[];
   targets: Target[];
   env: { name: string; description: string; required: boolean; secret: boolean; default?: string }[];
+  /** Team decisions served by the `get_decisions` tool. Optional: specs without it behave as before. */
+  decisions?: Decision[];
   provenance: {
     generator: "heuristic" | "llm";
     decreeVersion: string;
@@ -253,6 +278,7 @@ export interface GeneratedFile {
 export interface GenerateOptions {
   outDir: string; // informational; generators return relative paths
   decreeVersion: string;
+  targets?: Target[]; // every target in this generation, so one target can rely on another (claude-code on mcp)
 }
 
 export type Generator = (spec: HarnessSpec, opts: GenerateOptions) => GeneratedFile[];

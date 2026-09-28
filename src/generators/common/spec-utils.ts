@@ -80,6 +80,8 @@ export function describeBinding(tool: ToolSpec): string {
       return `Anthropic server tool (${tool.kind})`;
     case "memory":
       return "Anthropic memory tool";
+    case "decisions":
+      return "decisions in decree.json, scoped to the paths passed";
     default:
       return String(tool.kind);
   }

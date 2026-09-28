@@ -10,6 +10,7 @@
 import type {
   ApiEndpoint,
   ApiParam,
+  Decision,
   EvalCase,
   HarnessSpec,
   HttpBinding,
@@ -21,6 +22,7 @@ import type {
   ToolSpec,
 } from "../core/types.js";
 import { DEFAULT_BLOCKED_COMMANDS } from "../core/spec.js";
+import { withDecisions } from "../decisions/tool.js";
 import { DECREE_VERSION, DEFAULT_MODEL, DEFAULT_SUBAGENT_MODEL } from "../version.js";
 import {
   article,
@@ -46,6 +48,8 @@ export interface HeuristicOptions {
   goal: string;
   targets?: Target[];
   model?: string;
+  /** Team decisions to serve through the get_decisions tool (see src/decisions). */
+  decisions?: Decision[];
 }
 
 export const MAX_HTTP_TOOLS = 40;
@@ -2286,7 +2290,13 @@ export function planHeuristicDetailed(profile: ProjectProfile, opts: HeuristicOp
     }.`,
   );
 
-  const spec: HarnessSpec = {
+  if (opts.decisions?.length) {
+    const live = opts.decisions.filter((d) => d.status === "live").length;
+    notes.push(
+      `Serves ${opts.decisions.length} team decision${opts.decisions.length === 1 ? "" : "s"} (${live} live) through get_decisions, scoped to the paths the agent is about to change, instead of putting every rule in the system prompt.`,
+    );
+  }
+  const draft: HarnessSpec = {
     version: 1,
     name,
     displayName,
@@ -2317,6 +2327,7 @@ export function planHeuristicDetailed(profile: ProjectProfile, opts: HeuristicOp
       notes,
     },
   };
+  const spec = withDecisions(draft, opts.decisions);
   const candidateTools = [...tools];
   const lastScript = candidateTools.map((t) => t.kind === "shell").lastIndexOf(true);
   candidateTools.splice(lastScript + 1, 0, ...shell.optional);

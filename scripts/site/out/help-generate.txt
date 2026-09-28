@@ -7,6 +7,6 @@ Options:
   -o, --out <dir>       output directory (default: "agent")
   -f, --force           overwrite files you edited
   --dry-run             show what would change without writing
-  --clean               remove previously generated files that are no longer
-                        produced
+  --clean               remove previously generated files that are no longer produced
+  --json                print what was written as JSON
   -h, --help            show help

@@ -66,7 +66,7 @@ type ChatItem =
 export function clientMain(boot: ClientBoot, md: (src: string) => string): void {
   const tokenMeta = document.querySelector('meta[name="decree-token"]') as HTMLMetaElement | null;
   const TOKEN = tokenMeta ? tokenMeta.content : "";
-  const SECTIONS = ["overview", "tools", "prompt", "subagents", "evals", "files", "playground"] as const;
+  const SECTIONS = ["overview", "tools", "prompt", "subagents", "decisions", "evals", "files", "playground"] as const;
   type Section = (typeof SECTIONS)[number];
 
   // -------------------------------------------------------------------------
@@ -185,7 +185,7 @@ export function clientMain(boot: ClientBoot, md: (src: string) => string): void 
     return out.join("");
   };
   const kindIcon = (k: string) =>
-    k === "http" ? "globe" : k === "shell" ? "terminal" : k === "memory" ? "brain" : k === "web_search" || k === "web_fetch" ? "globe" : k.includes("file") || k === "search" ? "file" : "wrench";
+    k === "http" ? "globe" : k === "shell" ? "terminal" : k === "memory" ? "brain" : k === "decisions" ? "shield" : k === "web_search" || k === "web_fetch" ? "globe" : k.includes("file") || k === "search" ? "file" : "wrench";
   const bindingText = (t: ToolSpec): string => {
     if (t.kind === "http" && t.http) return `${t.http.method} ${t.http.path}`;
     if (t.kind === "shell" && t.shell) return t.shell.command;
@@ -296,6 +296,8 @@ export function clientMain(boot: ClientBoot, md: (src: string) => string): void 
     promptConflict: false,
     promptStale: false,
     saving: false,
+    decisionBusy: "" as string,
+    decisionFilter: "all" as "all" | "live" | "proposed" | "superseded",
     files: null as null | { hash: string; outDir: string; targets: string[]; files: FileEntry[]; summary: Record<string, number> },
     filesLoading: false,
     filesError: "",
@@ -374,13 +376,20 @@ export function clientMain(boot: ClientBoot, md: (src: string) => string): void 
   function renderSidebar(): void {
     const sp = spec();
     const counts: Partial<Record<Section, string>> = sp
-      ? { tools: String(sp.tools.length), subagents: String(sp.subagents.length), evals: String(sp.evals.length), files: S.files ? String(S.files.files.length) : "" }
+      ? {
+          tools: String(sp.tools.length),
+          subagents: String(sp.subagents.length),
+          decisions: sp.decisions?.length ? String(sp.decisions.length) : "",
+          evals: String(sp.evals.length),
+          files: S.files ? String(S.files.files.length) : "",
+        }
       : {};
     const items: [Section, string, string][] = [
       ["overview", "Overview", "grid"],
       ["tools", "Tools", "wrench"],
       ["prompt", "System prompt", "doc"],
       ["subagents", "Subagents", "users"],
+      ["decisions", "Decisions", "shield"],
       ["evals", "Evals", "check2"],
       ["files", "Files", "folder"],
       ["playground", "Playground", "chat"],
@@ -608,6 +617,7 @@ export function clientMain(boot: ClientBoot, md: (src: string) => string): void 
     if (t.fs) return `<div class="binding">${icon("folder", "sm")}<span>${esc(t.fs.root)}</span></div><dl class="kv" style="margin-top:12px"><dt>Operation</dt><dd>${esc(t.kind)}</dd>${t.fs.maxBytes ? `<dt>Max bytes</dt><dd>${fmtBytes(t.fs.maxBytes)}</dd>` : ""}</dl>`;
     if (t.kind === "web_search" || t.kind === "web_fetch") return `<p class="muted" style="margin:0">Anthropic server tool: runs on Anthropic's side, no local binding.</p>`;
     if (t.kind === "memory") return `<p class="muted" style="margin:0">Client-side memory tool, stored in <code>.decree/memory</code>.</p>`;
+    if (t.kind === "decisions") return `<p class="muted" style="margin:0">Serves the live decisions in <code>decree.json</code> whose globs match the paths the agent passes. See <a href="#/decisions">Decisions</a>.</p>`;
     return `<p class="dim" style="margin:0">No binding.</p>`;
   }
 
@@ -737,6 +747,87 @@ export function clientMain(boot: ClientBoot, md: (src: string) => string): void 
         </div></article>`,
       )
       .join("")}</div></div>`;
+  }
+
+  // -------------------------------------------------------------------------
+  // decisions
+  // -------------------------------------------------------------------------
+  function decisionsView(sp: HarnessSpec): string {
+    const all = sp.decisions ?? [];
+    const tool = sp.tools.find((t) => t.kind === "decisions");
+    const sub = tool
+      ? `The agent calls <code>${esc(tool.name)}</code> with the paths it is about to change and gets only the live decisions that govern them. Proposed decisions are not served until you confirm them.`
+      : "No tool serves these decisions yet. Run <code>decree-harness decisions extract</code> to add <code>get_decisions</code>.";
+    const head = pageHead(icon("shield", "sm") + " Decisions", "Decisions", sub);
+    if (!all.length) {
+      return `<div class="page">${head}<div class="card">${empty("shield", "No decisions yet", "Run <code>decree-harness decisions extract</code> to pull them from your ADRs, CLAUDE.md and AGENTS.md rules, and post-mortems.")}</div></div>`;
+    }
+    const count = (st: string) => all.filter((d) => d.status === st).length;
+    const segs: [typeof S.decisionFilter, string, number][] = [
+      ["all", "All", all.length],
+      ["live", "Live", count("live")],
+      ["proposed", "Proposed", count("proposed")],
+      ["superseded", "Superseded", count("superseded")],
+    ];
+    const shown = S.decisionFilter === "all" ? all : all.filter((d) => d.status === S.decisionFilter);
+    const pill = (st: string) => `<span class="pill ${st === "live" ? "green" : st === "proposed" ? "amber" : ""}">${esc(st)}</span>`;
+    const rows = shown
+      .map((d) => {
+        const busy = S.decisionBusy === d.id;
+        const action =
+          d.status === "proposed"
+            ? `<button class="btn" type="button" data-act="decision-confirm" data-id="${esc(d.id)}" ${S.decisionBusy ? "disabled" : ""} aria-label="Confirm ${esc(d.id)}">${busy ? '<span class="spinner"></span>' : icon("check")}Confirm</button>`
+            : "";
+        return `<tr>
+          <td><code>${esc(d.id)}</code><div style="margin-top:4px">${ic(d.title)}</div>${d.constraint.replace(/[.!?]$/, "") === d.title ? "" : `<div class="muted" style="margin-top:4px">${ic(d.constraint)}</div>`}${d.supersededBy ? `<div class="dim" style="margin-top:4px">Superseded by <code>${esc(d.supersededBy)}</code></div>` : ""}</td>
+          <td>${pill(d.status)}</td>
+          <td>${d.governs.map((g) => `<code>${esc(g)}</code>`).join("<br>")}</td>
+          <td class="muted">${esc(d.source)}</td>
+          <td>${action}</td>
+        </tr>`;
+      })
+      .join("");
+    return `<div class="page">${head}
+      <div class="toolbar"><div class="seg" role="group" aria-label="Filter by status">${segs
+        .map(([id, label, n]) => `<button type="button" data-act="decision-filter" data-filter="${id}" aria-pressed="${S.decisionFilter === id}">${label}<span class="n">${n}</span></button>`)
+        .join("")}</div></div>
+      <div class="card"><div class="table-wrap"><table class="t">
+        <thead><tr><th scope="col">Decision</th><th scope="col">Status</th><th scope="col">Governs</th><th scope="col">Source</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="5" class="muted">No ${esc(S.decisionFilter)} decisions.</td></tr>`}</tbody>
+      </table></div></div>
+    </div>`;
+  }
+
+  async function confirmDecision(id: string): Promise<void> {
+    const st = S.data;
+    if (!st || !st.ok || S.decisionBusy) return;
+    const decisions = (st.spec.decisions ?? []).map((d) => {
+      if (d.id !== id) return d;
+      const { supersededBy: _drop, ...rest } = d;
+      return { ...rest, status: "live" as const };
+    });
+    S.decisionBusy = id;
+    render();
+    try {
+      const r = await api<{ ok: true; spec: HarnessSpec; warnings: string[]; hash: string }>("/api/spec", {
+        method: "PATCH",
+        body: { patch: { decisions }, baseHash: st.hash },
+      });
+      if (S.data && S.data.ok) {
+        S.data.spec = r.spec;
+        S.data.warnings = r.warnings;
+        S.data.hash = r.hash;
+      }
+      S.files = null;
+      toast("ok", "Decision confirmed", `${id} is live. Run Regenerate in Files to update generated code.`);
+    } catch (err) {
+      const e = err as ApiError;
+      toast("err", e.status === 409 ? "decree.json changed on disk" : "Could not confirm", e.status === 409 ? "Reload and try again." : e.message);
+    } finally {
+      S.decisionBusy = "";
+      renderSidebar();
+      render();
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1366,6 +1457,9 @@ export function clientMain(boot: ClientBoot, md: (src: string) => string): void 
       case "subagents":
         view.innerHTML = subagentsView(sp);
         break;
+      case "decisions":
+        view.innerHTML = decisionsView(sp);
+        break;
       case "evals":
         view.innerHTML = evalsView(sp);
         break;
@@ -1597,6 +1691,13 @@ export function clientMain(boot: ClientBoot, md: (src: string) => string): void 
         }
         break;
       }
+      case "decision-confirm":
+        void confirmDecision(el.dataset.id ?? "");
+        break;
+      case "decision-filter":
+        S.decisionFilter = (el.dataset.filter ?? "all") as typeof S.decisionFilter;
+        render();
+        break;
       case "evals-run":
         void runEvals();
         break;

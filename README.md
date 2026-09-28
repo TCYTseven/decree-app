@@ -12,9 +12,13 @@ runnable code: a system prompt, a tool surface bound to your real endpoints and
 scripts, subagents, guardrails, and evals. You can chat with the agent right
 away from the terminal, then ship the generated code.
 
-It works the way mintlify works for API docs: point it at a codebase, get a
-generated artifact, keep one config file (`decree.json`) as the source of truth,
-and regenerate whenever the code changes.
+It also collects the decisions your team already made (ADRs, post-mortem lessons,
+rules in CLAUDE.md and AGENTS.md) and gives the agent only the ones that govern
+the files it is about to change.
+
+`decree.json` is the source of truth, the way `docs.json` is for Mintlify: edit
+it, regenerate, and keep it in the repo. The generated code is disposable. The
+decision record in `decree.json` is the part that lives on.
 
 ## What you get
 
@@ -36,6 +40,9 @@ agent/
   mcp-server/               MCP server (src/server.ts, src/tools.ts) for Claude Code, Claude Desktop, Cursor
   claude-code/              CLAUDE.md, .claude/{agents,commands,skills,settings.json}, .mcp.json
 ```
+
+When the repo has decisions, each target also gets `get_decisions` and a
+`decisions.json` (see [Decisions](#decisions)).
 
 Pick targets with `--targets typescript,python,mcp,claude-code` (or `all`).
 
@@ -71,13 +78,71 @@ Acme Orders Agent · 18 tools · asks before 5 risky tools
  ● read-only   ◆ writes   ■ destructive, asks first
 ```
 
+## Decisions
+
+`init` reads the decisions your repo already writes down and stores them in
+`decree.json` under `decisions`:
+
+- **ADRs** in `docs/adr`, `docs/adrs`, `docs/decisions`, `doc/adr`, `adr/`,
+  `architecture/decisions`, `decisions/`, and any `adr/` directory. The title
+  comes from the first heading (an `ADR-0003:` prefix is dropped), the status
+  from a `Status:` line, a Status section or frontmatter, the rule from the
+  Decision section, and the rationale from Context. `Superseded by [ADR-0007](...)`
+  links the two records.
+- **Rules files**: `CLAUDE.md`, `AGENTS.md` (also nested ones, which govern their
+  own directory), `.cursor/rules/*.mdc` (its `globs:` become the scope),
+  `.cursorrules` and `.github/copilot-instructions.md`. Bullets that state a rule
+  ("Never ...", "Always ...", "... must ...", "Use X instead of Y") become
+  decisions. Sections other tools manage, such as gstack's, are skipped.
+- **Post-mortems** in `docs/postmortems`, `postmortems/`, `incidents/`: rule-like
+  bullets under Action items, Lessons, Follow-ups and Prevention.
+
+Each decision has an `id`, a `constraint` (the rule), a `status` and `governs`
+globs. The scope comes from frontmatter (`governs:`), then from repo paths the
+text mentions that exist, then from the directory of a nested rules file, and
+otherwise covers the whole repo (`**`).
+
+| Status | Meaning |
+|---|---|
+| `live` | Accepted. The agent follows it. ADRs marked Accepted start here. |
+| `proposed` | Extracted but not confirmed. Rules and post-mortem lessons start here. Not served by default. |
+| `superseded` | Replaced or rejected. Kept for history, never served. |
+
+```bash
+decree-harness decisions                    # table of id, status, governs, source (--status, --json)
+decree-harness decisions extract            # re-read the repo; keeps your statuses, adds new ones, flags missing sources
+decree-harness decisions for src/db/users.ts   # exactly what the agent gets for that path
+decree-harness decisions confirm <id...>    # proposed -> live
+decree-harness decisions supersede <id> --by <new-id>   # retire one (without --by: rejected)
+```
+
+Commands that change decisions regenerate the harness when it was generated
+before (`--no-generate` to skip).
+
+When a spec has decisions, the harness gets a read-only `get_decisions` tool
+and one line in its system prompt: call it with the files you are about to
+change, follow what it returns, cite the decision id, and stop if a request
+conflicts with a live decision. The tool returns at most 8 live decisions whose
+globs match those paths, most specific first, with repo-wide ones last. Every
+target implements it with the same matching: the TypeScript and Python agents
+and the MCP server read a `decisions.json` shipped with them, and Claude Code
+calls the MCP tool (or, without the MCP target, a small
+`.claude/skills/decisions` script that needs only Node). The generated
+`CLAUDE.md` says how to look decisions up and lists none of them.
+
+Why scope them: a flat context file loads every rule into every session,
+whether or not it applies to the task. A 2026 ETH Zurich study found that flat
+`AGENTS.md` files lowered agent task success and raised cost by more than 20%.
+Serving only the decisions that govern the touched paths keeps the context
+small and relevant.
+
 ## How it plans
 
 1. **Scan** (local, no network). Languages, frameworks, package manager, scripts
    (package.json, Makefile, pyproject, justfile, Taskfile), OpenAPI/Swagger specs,
    routes found in code (Express, Fastify, Hono, NestJS, Next.js, FastAPI, Flask,
    Django, Gin, Echo, Chi, Rails, and more), env var names, database models, README,
-   existing agent config.
+   existing agent config, and decisions (see above).
 2. **Architect** (Claude). Designs the tool surface, system prompt, subagents,
    guardrails, context strategy, and evals, grounded in candidate tools derived
    from the scan so bindings point at endpoints and scripts that exist.
@@ -104,6 +169,7 @@ kind of spec from the scan alone.
 | `eval` | Run the eval cases and report pass/fail (tools run in dry-run mode by default) |
 | `doctor` | Check Node, API key, `decree.json`, required env vars, generated output |
 | `tools` | List the tools in `decree.json` |
+| `decisions` | List, extract, confirm and supersede team decisions; `decisions for <path>` shows what the agent gets |
 | `schema` | Print the JSON schema for `decree.json` |
 
 Useful flags: `--yes` (non-interactive), `--offline`, `--model <id>`,

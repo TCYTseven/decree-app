@@ -12,6 +12,7 @@ const RUNNERS = {
   list_files: { module: "fs", fn: "listFiles" },
   search: { module: "fs", fn: "searchFiles" },
   memory: { module: "memory", fn: "runMemory" },
+  decisions: { module: "decisions", fn: "getDecisions" },
 } as const;
 
 /** Anthropic server tools, declared by type (no local executor). */
@@ -100,6 +101,8 @@ function runExpression(spec: ToolSpec): string {
     case "shell":
       if (!spec.shell) return missingBinding("shell");
       return `(input) =>\n    ${runner.fn}(input, ${tsLiteral(shellBinding(spec), 2)})`;
+    case "decisions":
+      return runner.fn;
     default: {
       const fs = spec.fs ?? { root: "." };
       const binding = isFsKind(spec.kind) && spec.kind !== "read_file" ? { root: fs.root } : fs;

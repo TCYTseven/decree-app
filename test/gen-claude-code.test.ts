@@ -3,6 +3,7 @@ import { generateClaudeCode, claudeModelAlias, neutralizeSkillText, derivePermis
 import { parseFrontmatter } from "../src/generators/common/index.js";
 import type { GeneratedFile, HarnessSpec } from "../src/core/types.js";
 import { sampleSpec } from "./helpers/sample-spec.js";
+import { withDecisions } from "../src/decisions/tool.js";
 
 const OPTS = { outDir: "agent", decreeVersion: "0.1.0" };
 
@@ -305,5 +306,50 @@ describe("generateClaudeCode", () => {
     const b: GeneratedFile[] = generateClaudeCode(sampleSpec(), OPTS);
     expect(a).toEqual(b);
     expect(generateClaudeCode(nasty(), OPTS)).toEqual(generateClaudeCode(nasty(), OPTS));
+  });
+});
+
+describe("generateClaudeCode: decisions", () => {
+  const decisions = [
+    { id: "adr-0001-db", title: "Database", constraint: "Only src/db writes SQL.", status: "live" as const, governs: ["src/db/**"], source: "docs/adr/0001-db.md" },
+    { id: "rule-claude-md-no-floats", title: "No floats", constraint: "Never use floats for money.", status: "proposed" as const, governs: ["**"], source: "CLAUDE.md:4" },
+  ];
+
+  it("without the MCP target: the decisions skill script, allowed by one narrow Bash rule, and nothing listed inline", () => {
+    const files = gen(withDecisions(noHttp(), decisions), { ...OPTS, targets: ["typescript", "claude-code"] } as typeof OPTS);
+    const claudeMd = files["CLAUDE.md"]!;
+    expect(claudeMd).toContain("## Team decisions");
+    expect(claudeMd).toContain("run `node .claude/skills/decisions/get-decisions.mjs <paths...>`");
+    expect(claudeMd).not.toContain("Only src/db writes SQL");
+    expect(claudeMd).not.toContain("adr-0001-db");
+    expect(files[".mcp.json"]).toBeUndefined();
+    expect(files[".claude/skills/decisions/get-decisions.mjs"]).toMatch(/^#!\/usr\/bin\/env node/);
+    expect(JSON.parse(files[".claude/skills/decisions/decisions.json"]!)).toEqual(decisions);
+    const skill = fm(files[".claude/skills/decisions/SKILL.md"]!);
+    expect(skill["allowed-tools"]).toEqual(["Bash(node .claude/skills/decisions/get-decisions.mjs:*)"]);
+    const settings = JSON.parse(files[".claude/settings.json"]!);
+    expect(settings.permissions.allow).toContain("Bash(node .claude/skills/decisions/get-decisions.mjs:*)");
+    expect(settings.permissions.allow).not.toContain("Bash");
+    const agent = files[".claude/agents/acme-ops-agent.md"]!;
+    expect(fm(agent).skills).toContain("decisions");
+    expect(agent).toMatch(/- `get_decisions`: run `node \.claude\/skills\/decisions\/get-decisions\.mjs <paths\.\.\.>` with Bash/);
+  });
+
+  it("with the MCP target: the MCP tool, wired in .mcp.json, with the script as fallback", () => {
+    const files = gen(withDecisions(noHttp(), decisions), { ...OPTS, targets: ["mcp", "claude-code"] } as typeof OPTS);
+    expect(files["CLAUDE.md"]).toContain("call `mcp__acme-ops-agent__get_decisions` with the files or directories you will change");
+    expect(files["CLAUDE.md"]).toContain("If the MCP server is not running, run `node .claude/skills/decisions/get-decisions.mjs <paths...>` instead.");
+    expect(JSON.parse(files[".mcp.json"]!).mcpServers["acme-ops-agent"]).toBeDefined();
+    const settings = JSON.parse(files[".claude/settings.json"]!);
+    expect(settings.enabledMcpjsonServers).toEqual(["acme-ops-agent"]);
+    expect(settings.permissions.allow).toContain("mcp__acme-ops-agent__get_decisions");
+    expect(fm(files[".claude/agents/acme-ops-agent.md"]!).tools).toContain("mcp__acme-ops-agent__get_decisions");
+    expect(files["README.md"]).toContain("`get_decisions` is served by the generated MCP server");
+  });
+
+  it("with API tools and no target list, the MCP server is already wired, so it serves get_decisions too", () => {
+    const files = gen(withDecisions(sampleSpec(), decisions));
+    expect(files["CLAUDE.md"]).toContain("`mcp__acme-ops-agent__get_decisions`");
+    expect(files["README.md"]).toContain("The API tools and `get_decisions` are served by the generated MCP server");
   });
 });

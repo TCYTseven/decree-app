@@ -1,0 +1,19 @@
+{
+  "name": "ledger-service",
+  "version": "1.0.0",
+  "description": "Ledger service: accounts, transfers and billing for the Acme platform.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0",
+    "eslint": "^9.0.0"
+  }
+}

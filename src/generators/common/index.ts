@@ -145,6 +145,23 @@ function renderReadme(spec: HarnessSpec, opts: GenerateOptions): string {
     );
   }
 
+  if (spec.decisions?.length) {
+    const count = (st: string) => spec.decisions!.filter((d) => d.status === st).length;
+    const tool = spec.tools.find((t) => t.kind === "decisions");
+    out.push(
+      "## Decisions",
+      "",
+      `${spec.decisions.length} team decision(s) in \`decree.json\`: ${count("live")} live, ${count("proposed")} proposed, ${count("superseded")} superseded.` +
+        (tool
+          ? ` The agent calls ${inlineCode(tool.name)} with the paths it is about to change and gets back only the live decisions that govern them, most specific first.`
+          : " No tool serves them yet; add one with `npx decree-harness decisions extract`."),
+      "",
+      "- `npx decree-harness decisions` lists them; `decisions confirm <id>` makes a proposed decision live; `decisions supersede <id>` retires one.",
+      "- `npx decree-harness decisions for <path>` shows what the agent would get for a path.",
+      "",
+    );
+  }
+
   out.push("## Generated targets", "");
   const targets = orderedTargets(spec);
   if (targets.length === 0) out.push("_No targets selected._", "");
@@ -360,6 +377,33 @@ function renderHarnessDoc(spec: HarnessSpec, opts: GenerateOptions): string {
       ),
       "",
     );
+  }
+
+  if (spec.decisions) {
+    out.push(`## Decisions (${spec.decisions.length})`, "");
+    const tool = spec.tools.find((t) => t.kind === "decisions");
+    out.push(
+      tool
+        ? `Served by ${inlineCode(tool.name)}: the agent passes the paths it will change and gets only the live decisions whose globs match them (at most 8, most specific first). Proposed decisions are returned only when asked for; superseded ones never.`
+        : "No tool serves these decisions. Run `npx decree-harness decisions extract` to add `get_decisions`.",
+      "",
+    );
+    if (spec.decisions.length === 0) out.push("_None._", "");
+    else {
+      out.push(
+        renderTable(
+          ["Id", "Status", "Rule", "Governs", "Source"],
+          spec.decisions.map((d) => [
+            inlineCode(d.id),
+            d.status + (d.supersededBy ? ` by ${inlineCode(d.supersededBy)}` : ""),
+            oneLine(d.constraint),
+            d.governs.map((g) => inlineCode(g)).join(", "),
+            d.source,
+          ]),
+        ),
+        "",
+      );
+    }
   }
 
   out.push(`## Evals (${spec.evals.length})`, "");

@@ -6,6 +6,7 @@ import { planHarness, refineHarness } from "../src/planner/index.js";
 import { toStrictSchema } from "../src/llm/schema.js";
 import { CRITIC_SCHEMA, DRAFT_SCHEMA, REFINE_SCHEMA } from "../src/planner/prompts.js";
 import { MockLLM } from "./helpers/mock-llm.js";
+import { withDecisions } from "../src/decisions/tool.js";
 import { sampleProfile, sampleSpec } from "./helpers/sample-spec.js";
 
 const GOAL = "Help on-call engineers inspect orders, run tests, and triage failures.";
@@ -133,6 +134,34 @@ describe("planHarness with an LLM", () => {
 });
 
 describe("refineHarness", () => {
+  it("keeps decisions and get_decisions out of the model's hands and puts them back", async () => {
+    const decisions = [{ id: "adr-0001-db", title: "Database", constraint: "Only src/db writes SQL.", status: "live" as const, governs: ["src/db/**"], source: "docs/adr/0001-db.md" }];
+    const base = withDecisions(sampleSpec(), decisions);
+    // The model rewrites the prompt and drops the decisions line; it never saw get_decisions or the decisions.
+    const revised = draft((d) => {
+      d.tools = d.tools.filter((t: any) => t.name !== "wipe_orders");
+      d.systemPrompt = "# Role\nYou run Acme ops.\n\n# How to work\n- Read before you act.";
+    });
+    const llm = new MockLLM([{ changes: ["Shorter prompt."], spec: revised }]);
+    const out = await refineHarness(base, "shorten the prompt", { llm, profile: sampleProfile() });
+    const prompt = llm.calls[0]!.opts.prompt;
+    expect(prompt).not.toContain("get_decisions");
+    expect(prompt).not.toContain("adr-0001-db");
+    expect(out.decisions).toEqual(decisions);
+    expect(out.tools.at(-1)).toMatchObject({ name: "get_decisions", kind: "decisions" });
+    expect(out.systemPrompt).toMatch(/# How to work\n- Before you change code, call `get_decisions`/);
+    expect(validateSpec(out).ok).toBe(true);
+  });
+
+  it("planHarness with an LLM adds get_decisions after planning", async () => {
+    const decisions = [{ id: "adr-0001-db", title: "Database", constraint: "Only src/db writes SQL.", status: "live" as const, governs: ["src/db/**"], source: "docs/adr/0001-db.md" }];
+    const llm = new MockLLM([draft()]);
+    const spec = await planHarness(sampleProfile(), { goal: GOAL, targets: ["typescript"], llm, critique: false, decisions });
+    expect(spec.decisions).toEqual(decisions);
+    expect(spec.tools.filter((t) => t.kind === "decisions")).toHaveLength(1);
+    expect(spec.systemPrompt).toContain("get_decisions");
+  });
+
   it("applies feedback, grounds, and appends a provenance note", async () => {
     const base = sampleSpec();
     const revised = draft((d) => {

@@ -1,0 +1,15 @@
+Usage: decree-harness decisions [options] [command]
+
+the team decisions the agent follows: extract them, confirm them, check what applies to a path
+
+Options:
+  -h, --help                       show help
+
+Commands:
+  list [options]                   list the decisions in decree.json
+  extract [options]                find decisions in ADRs, CLAUDE.md/AGENTS.md rules and
+                                   post-mortems, and merge them into decree.json
+  for [options] <paths...>         show what get_decisions returns for these files or directories
+  confirm [options] <ids...>       mark proposed decisions live, so the agent follows them
+  supersede|reject [options] <id>  retire a decision (with --by, name the decision that replaces it)
+  help [command]                   display help for command

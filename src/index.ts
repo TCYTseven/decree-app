@@ -8,6 +8,18 @@ export { scanProject, type ScanOptions } from "./scanner/index.js";
 export { planHarness, refineHarness, type PlanOptions } from "./planner/index.js";
 export { generateTargets, TARGET_DIRS } from "./generators/index.js";
 export { runAgent } from "./runtime/index.js";
+export {
+  extractDecisions,
+  mergeDecisions,
+  scopeDecisions,
+  rankDecisions,
+  formatDecisions,
+  globMatches,
+  withDecisions,
+  type ExtractResult,
+  type MergeResult,
+  type ScopeOptions,
+} from "./decisions/index.js";
 export { runEvals, type EvalOptions } from "./eval/index.js";
 export { validateSpec, specJsonSchema } from "./core/spec.js";
 export { createLLM, resolveApiKey, MissingApiKeyError } from "./llm/client.js";

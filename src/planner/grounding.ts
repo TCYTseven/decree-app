@@ -7,10 +7,10 @@ import { DEFAULT_BLOCKED_COMMANDS, validateSpec } from "../core/spec.js";
 import { analyzeEndpoint, type HttpDefaults } from "./heuristic.js";
 import { cleanRoutePath, isPlainObject, findEndpoint, pathParams, snake, TOOL_NAME_RE, uniq, uniqueName } from "./util.js";
 
-const KINDS = new Set<ToolKind>(["http", "shell", "read_file", "write_file", "list_files", "search", "web_search", "web_fetch", "memory"]);
+const KINDS = new Set<ToolKind>(["http", "shell", "read_file", "write_file", "list_files", "search", "web_search", "web_fetch", "memory", "decisions"]);
 const SERVER_KINDS = new Set<ToolKind>(["web_search", "web_fetch", "memory"]);
 const FS_KINDS = new Set<ToolKind>(["read_file", "write_file", "list_files", "search"]);
-const PURE_READ_KINDS = new Set<ToolKind>(["read_file", "list_files", "search", "web_search", "web_fetch"]);
+const PURE_READ_KINDS = new Set<ToolKind>(["read_file", "list_files", "search", "web_search", "web_fetch", "decisions"]);
 
 export interface GroundingContext {
   profile?: ProjectProfile;
