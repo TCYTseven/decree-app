@@ -5,8 +5,8 @@ import type { HarnessSpec, JSONSchema, ToolSpec } from "../../core/types.js";
 /** Context every tool executor receives. */
 export interface ToolContext {
   projectRoot: string;
-  /** Used for guardrails (blockedCommands, allowedPaths, redactEnv). */
-  spec: Pick<HarnessSpec, "guardrails">;
+  /** Used for guardrails (blockedCommands, allowedPaths, redactEnv) and the decisions `get_decisions` serves. */
+  spec: Pick<HarnessSpec, "guardrails"> & Partial<Pick<HarnessSpec, "decisions">>;
   dryRun?: boolean;
   signal?: AbortSignal;
   /** Environment to read base URLs / auth / redaction values from. Defaults to process.env. */

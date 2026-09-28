@@ -214,7 +214,7 @@ All of these live in \`${pkg}/config.py\`.
 | \`${pkg}/config.py\` | Model, effort, guardrails, context strategy, pricing |
 | \`${pkg}/prompt.py\` | System prompt${ctx.subagents.length ? "s" : ""} |
 | \`${pkg}/tools/\` | Tool definitions (\`registry.py\`) and executors |
-${ctx.subagents.length ? `| \`${pkg}/subagents.py\` | Subagent definitions and delegate tools |\n` : ""}| \`${pkg}/agent.py\` | The agent loop (\`Agent\`) |
+${ctx.has.decisions ? `| \`${pkg}/decisions.json\` | Team decisions served by \`get_decisions\`, written from \`decree.json\` |\n` : ""}${ctx.subagents.length ? `| \`${pkg}/subagents.py\` | Subagent definitions and delegate tools |\n` : ""}| \`${pkg}/agent.py\` | The agent loop (\`Agent\`) |
 | \`${pkg}/cli.py\` | Command line interface |
 | \`${pkg}/evals.py\` | Eval runner |
 | \`tests/test_tools.py\` | Offline tool tests |

@@ -15,6 +15,7 @@ import { extractOpenApi } from "./openapi.js";
 import { dedupeEndpoints, detectRoutes } from "./routes/index.js";
 import { renderTree } from "./tree.js";
 import { walkProject } from "./walk.js";
+import { decisionSourcesOf } from "../decisions/extract.js";
 import { detectWorkspaces, tagEndpointsByWorkspace, workspaceScripts } from "./workspaces.js";
 
 export interface ScanOptions {
@@ -150,6 +151,8 @@ export async function scanProject(root: string, opts: ScanOptions = {}): Promise
   if (cli) profile.cli = cli;
   if (database) profile.database = database;
   if (git) profile.git = git;
+  const decisionSources = decisionSourcesOf(walk).map((f) => f.path);
+  if (decisionSources.length) profile.decisionSources = decisionSources.slice(0, 50);
   profile.stats.scanMs = Date.now() - started;
   progress(`Scan complete in ${profile.stats.scanMs}ms`);
   return profile;

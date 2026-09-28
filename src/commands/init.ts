@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import * as p from "@clack/prompts";
 import type { Command } from "commander";
-import type { HarnessSpec, LLM, Target } from "../core/types.js";
+import type { Decision, HarnessSpec, LLM, Target } from "../core/types.js";
 import { loadSpec, projectPaths, saveProfile, saveSpec, specExists } from "../core/config.js";
 import { MissingApiKeyError } from "../llm/client.js";
 import { DEFAULT_OUT_DIR, SPEC_FILENAME } from "../version.js";
@@ -15,6 +15,8 @@ import { c, contentWidth, sym, termWidth, wrapText } from "../ui/theme.js";
 import { interactive, rootFor, selfCommand } from "./context.js";
 import {
   ALL_TARGETS,
+  decisionsFoundLine,
+  decisionsStep,
   defaultTargets,
   findApiKey,
   generateStep,
@@ -107,8 +109,11 @@ export async function initCommand(dir: string | undefined, opts: InitOptions, cm
   let spec: HarnessSpec | undefined;
   let llm: LLM | undefined;
   let previousTargets: Target[] | undefined;
+  let previousDecisions: Decision[] | undefined;
   if (await specExists(root)) {
-    previousTargets = await loadSpec(root).then((l) => l.spec.targets, () => undefined);
+    const previous = await loadSpec(root).then((l) => l.spec, () => undefined);
+    previousTargets = previous?.targets;
+    previousDecisions = previous?.decisions;
     let mode: "regenerate" | "replan";
     if (ask) {
       mode = await askSelect<"regenerate" | "replan">({
@@ -210,10 +215,15 @@ export async function initCommand(dir: string | undefined, opts: InitOptions, cm
       log.info(`Targets ${c.dim(sym.arrow)} ${targets.join(", ")}`);
     }
 
+    // Decisions: the ADRs, rules and post-mortem lessons the agent will be held to (offline, no LLM).
+    const decisions = await decisionsStep(root, previousDecisions);
+
     // Planner
     llm = await choosePlanner(root, opts, ask);
-    spec = await planStep(profile, { goal, targets, llm, model: opts.model, critique: opts.critique });
+    spec = await planStep(profile, { goal, targets, llm, model: opts.model, critique: opts.critique, decisions });
     log.message(specSummary(spec));
+    const found = decisionsFoundLine(decisions, self);
+    if (found) log.info(found);
     if (llm) log.info(usageLine(llm));
 
     if (opts.dryRun) {

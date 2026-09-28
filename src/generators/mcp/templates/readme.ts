@@ -152,6 +152,13 @@ export function readmeMd(m: McpModel): string {
           "",
         ]
       : []),
+    ...(m.tools.some((t) => t.kind === "decisions")
+      ? [
+          "`get_decisions` answers from `decisions.json` (written from `decree.json`): pass the paths you are about to",
+          "change and it returns only the live team decisions that govern them. Edits to the file apply without a restart.",
+          "",
+        ]
+      : []),
     ...(s.subagents.length > 0
       ? [
           "Subagents are not tools here (they need their own model loop); each is exposed as a prompt instead.",

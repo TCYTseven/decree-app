@@ -1,6 +1,7 @@
 Usage: decree-harness [options] [command]
 
-Scan a codebase and generate an optimal AI agent harness for it.
+Scan a codebase and generate an AI agent harness for it: prompt, tools, subagents, guardrails and
+evals.
 
 Options:
   -v, --version                   print the version
@@ -10,34 +11,31 @@ Options:
   -h, --help                      show help
 
 Commands:
-  init [options] [dir]            scan, plan and generate a harness (the default
-                                  command)
-  scan [options] [dir]            scan the project and write
-                                  .decree/profile.json
-  plan [options] [dir]            scan + plan, writing decree.json only (no
-                                  code)
+  init [options] [dir]            scan, plan and generate a harness (the default command)
+  scan [options] [dir]            scan the project and write .decree/profile.json
+  plan [options] [dir]            scan + plan, writing decree.json only (no code)
   generate|gen [options]          render decree.json into runnable code
-  refine [options] <feedback...>  change the harness in plain English (uses
-                                  Claude), then regenerate
-  chat [options]                  chat with your agent in the terminal (tools
-                                  run locally)
-  run [options] [prompt...]       run the agent once on a prompt (also reads
-                                  stdin)
-  eval [options]                  run the evals in decree.json and report
-                                  pass/fail
-  doctor [options]                check your environment, API key, decree.json
-                                  and generated code
+  refine [options] <feedback...>  change the harness in plain English (uses Claude), then regenerate
+  chat [options]                  chat with your agent in the terminal (tools run locally)
+  run [options] [prompt...]       run the agent once on a prompt (also reads stdin)
+  eval [options]                  run the evals in decree.json and report pass/fail
+  doctor [options]                check your environment, API key, decree.json and generated code
   tools [options]                 list the tools in decree.json
+  decisions                       the team decisions the agent follows: extract them, confirm them,
+                                  check what applies to a path
   schema                          print the JSON schema for decree.json
+  preview [options]               open a local dashboard to inspect, edit and try the harness
   help [command]                  display help for command
 
 Examples:
-  $ npx decree-harness                          scan, plan and generate interactively
-  $ npx decree-harness init --yes --offline     non-interactive, no API key needed
-  $ npx decree-harness init --goal "Triage failing CI runs" --targets typescript,mcp
-  $ npx decree-harness chat                     talk to the generated agent
-  $ npx decree-harness run "How many orders are pending?" --json
-  $ npx decree-harness refine "make every tool read-only"
-  $ npx decree-harness eval --filter orders
+  $ npx decree-harness                                         interactive setup
+  $ npx decree-harness init --yes --offline                    no prompts, no API key needed
+  $ npx decree-harness init -g "Fix flaky tests" -t ts,mcp     set the goal and targets up front
+  $ npx decree-harness chat                                    talk to the generated agent
+  $ npx decree-harness run "Which orders are pending?" --json  one-shot run, JSON output
+  $ npx decree-harness refine "make every tool read-only"      edit the harness in plain English
+  $ npx decree-harness decisions for src/db                    decisions that apply to a path
+  $ npx decree-harness eval --filter orders                    run a subset of the evals
 
-Docs: decree.json is the source of truth. Edit it, then run `decree-harness generate`.
+decree.json is the source of truth: edit it, then run `npx decree-harness generate`. Installed
+globally, the shorter `decree` command works too.

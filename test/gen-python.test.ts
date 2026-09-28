@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { GeneratedFile, HarnessSpec, ToolSpec } from "../src/core/types.js";
 import { generatePython } from "../src/generators/python/index.js";
 import { pythonPackageName, pyStr, pyLiteral, toScalar, tomlStr } from "../src/generators/python/py.js";
+import { withDecisions } from "../src/decisions/tool.js";
 import { sampleSpec } from "./helpers/sample-spec.js";
 
 const TMP = path.resolve("test/.tmp/gen-python");
@@ -240,6 +241,29 @@ describe("generatePython", () => {
     if (HAS_PYTHON) pyCompile(dir, files);
     if (HAS_PYTEST) {
       // fs-only needs neither anthropic nor httpx, so the generated tests run with a bare pytest.
+      const res = spawnSync(PYTHON, ["-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"], {
+        cwd: dir,
+        encoding: "utf8",
+        env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
+      });
+      expect(res.status, res.stdout + res.stderr).toBe(0);
+    }
+  });
+
+  it("renders get_decisions with its data file, and its generated tests pass", () => {
+    const spec = sampleSpec();
+    const withD = withDecisions(
+      sampleSpec({ tools: spec.tools.filter((t) => ["read_file", "list_files"].includes(t.kind)), subagents: [], evals: [] }),
+      [{ id: "adr-0001-db", title: "Database", constraint: "Only src/db writes SQL.", status: "live", governs: ["src/db/**"], source: "docs/adr/0001-db.md" }],
+    );
+    const { dir, files } = render("decisions", withD);
+    const f = byPath(files);
+    expect(f["acme_ops_agent/tools/decisions.py"]).toContain("def run_get_decisions(");
+    expect(JSON.parse(f["acme_ops_agent/decisions.json"]!)).toEqual(withD.decisions);
+    expect(f["acme_ops_agent/tools/registry.py"]).toContain('kind="decisions"');
+    expect(f["README.md"]).toContain("acme_ops_agent/decisions.json");
+    if (HAS_PYTHON) pyCompile(dir, files);
+    if (HAS_PYTEST) {
       const res = spawnSync(PYTHON, ["-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"], {
         cwd: dir,
         encoding: "utf8",

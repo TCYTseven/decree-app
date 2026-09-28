@@ -16,7 +16,7 @@ $CLI init --yes --offline --targets all -C "$TMP/demo" --no-color | sed "s#$TMP/
 $CLI tools -C "$TMP/demo" --no-color > "$OUT/tools.txt"
 $CLI doctor -C "$TMP/demo" --no-color > "$OUT/doctor.txt" || true
 $CLI --help --no-color > "$OUT/help.txt"
-for c in init scan plan generate refine chat run eval doctor tools schema preview; do
+for c in init scan plan generate refine chat run eval doctor tools decisions schema preview; do
   $CLI "$c" --help --no-color > "$OUT/help-$c.txt" 2>/dev/null || rm -f "$OUT/help-$c.txt"
 done
 $CLI schema > "$OUT/schema.json"

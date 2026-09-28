@@ -6,6 +6,7 @@ import { executeListFiles, executeReadFile, executeSearch, executeWriteFile } fr
 import { executeHttp } from "./http.js";
 import { executeMemory } from "./memory.js";
 import { executeShell } from "./shell.js";
+import { runGetDecisions } from "../../decisions/scope.js";
 
 export * from "./common.js";
 export { prepareHttpRequest, executeHttp } from "./http.js";
@@ -103,6 +104,8 @@ async function dispatch(tool: ToolSpec, input: ToolInput, ctx: ToolContext): Pro
       return executeSearch(tool, input, ctx);
     case "memory":
       return executeMemory(input, ctx);
+    case "decisions":
+      return runGetDecisions(ctx.spec.decisions ?? [], input, ctx.projectRoot);
     case "web_search":
     case "web_fetch":
       return fail(`${tool.name} is an Anthropic server tool; it is executed by the API, not locally.`);

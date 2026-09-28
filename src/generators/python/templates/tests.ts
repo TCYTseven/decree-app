@@ -4,6 +4,7 @@ import { docstring } from "./config.js";
 export function testToolsPy(ctx: PyContext): string {
   const { pkg, has } = ctx;
   const imports = [
+    has.decisions ? `from ${pkg}.tools import decisions` : "",
     has.fs ? `from ${pkg}.tools import fs` : "",
     has.http ? `from ${pkg}.tools.http import build_request, encode_component` : "",
     has.memory ? `from ${pkg}.tools.memory import MemoryStore` : "",
@@ -233,6 +234,41 @@ def test_memory_commands(tmp_path: Path) -> None:
     assert store.execute({"command": "view", "path": "/etc/passwd"}).is_error
     assert store.execute({"command": "delete", "path": "/memories"}).is_error
     assert store.execute({"command": "explode", "path": "/memories"}).is_error`);
+  }
+
+  if (has.decisions) {
+    sections.push(String.raw`
+# --------------------------------------------------------------------------
+# Decisions
+# --------------------------------------------------------------------------
+
+DECISIONS = [
+    {"id": "repo-wide", "title": "Repo", "constraint": "Repo rule.", "status": "live", "governs": ["**"], "source": "CLAUDE.md:1"},
+    {"id": "db", "title": "DB", "constraint": "DB rule.", "status": "live", "governs": ["src/db/**"], "source": "docs/adr/1.md"},
+    {"id": "draft", "title": "Draft", "constraint": "Draft rule.", "status": "proposed", "governs": ["src/**"], "source": "AGENTS.md:3"},
+    {"id": "old", "title": "Old", "constraint": "Old rule.", "status": "superseded", "governs": ["src/**"], "source": "docs/adr/0.md"},
+]
+
+
+def test_decision_globs() -> None:
+    assert decisions.glob_matches("src/**", "src")
+    assert decisions.glob_matches("src/*.py", "./src/a.py")
+    assert not decisions.glob_matches("src/*.py", "src/a/b.py")
+    assert decisions.glob_matches("src/db/**", "src")
+    assert decisions.glob_matches("**/*.{py,pyi}", "a/b/c.pyi")
+
+
+def test_get_decisions_serves_live_decisions_most_specific_first(tmp_path: Path) -> None:
+    out = decisions.run_get_decisions(DECISIONS, {"paths": ["src/db/users.py"]}, tmp_path).output
+    assert out.index("[db]") < out.index("[repo-wide]")
+    assert "[draft]" not in out and "[old]" not in out
+    with_proposed = decisions.run_get_decisions(DECISIONS, {"paths": ["src/x.py"], "include_proposed": True}, tmp_path).output
+    assert "[draft]" in with_proposed and "[old]" not in with_proposed
+    assert decisions.run_get_decisions(DECISIONS, {"paths": []}, tmp_path).is_error
+
+
+def test_decisions_file_loads() -> None:
+    assert isinstance(decisions.load_decisions(), list)`);
   }
 
   if (has.http) {

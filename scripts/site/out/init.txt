@@ -1,10 +1,10 @@
 T   decree  v0.1.0 · agent harness generator
 |
-o  Project acme-orders /tmp/claude-0/-home-user-decree-app/e7dd7e69-fc80-59e1-8873-bd84df15989f/scratchpad/site/demo/acme-orders
+o  Project demo .
 |
-*  Scanned acme-orders · 16 files 86ms
+*  Scanned acme-orders · 16 files 75ms
 |
-o  acme-orders ----------------------------------------+
+o  Found in acme-orders -------------------------------+
 |                                                      |
 |  Stack         TypeScript · npm                      |
 |  Frameworks    express                               |
@@ -13,55 +13,52 @@ o  acme-orders ----------------------------------------+
 |  Env vars      6 (2 secret)                          |
 |  Database      prisma (3 models)                     |
 |  Agent config  none                                  |
-|  Files         16 scanned in 86ms                    |
 |                                                      |
 +------------------------------------------------------+
 |
 •  Goal › Operate the orders API and triage test failures
 |
-*  Planned Acme Orders Agent · 18 tools · 2 subagents · 9 evals 30ms
+*  Planned Acme Orders Agent · 18 tools · 0 subagents · 12 evals 37ms
 |
 |  Acme Orders Agent (acme-orders-agent)
-|  Acme Orders Agent for acme-orders (Acme orders service: REST API for orders and customers): Operate the orders API and triage test failures.
+|  Acme Orders Agent for acme-orders (Acme orders service: REST API for orders and customers):
+|  Operate the orders API and triage test failures.
 |
-|  ┌───────────────────┬────────────┬─────────────┬─────────────────────────────┐
-|  │ Tool              │ Kind       │ Safety      │ Binds to                    │
-|  ├───────────────────┼────────────┼─────────────┼─────────────────────────────┤
-|  │ get_health        │ http       │ ● read-only │ GET /health                 │
-|  │ list_orders       │ http       │ ● read-only │ GET /orders                 │
-|  │ create_order      │ http       │ • writes    │ POST /orders                │
-|  │ get_order         │ http       │ ● read-only │ GET /orders/{id}            │
-|  │ delete_order      │ http       │ ▲ approval  │ DELETE /orders/{id}         │
-|  │ cancel_order      │ http       │ ▲ approval  │ POST /orders/{id}/cancel    │
-|  │ list_customers    │ http       │ ● read-only │ GET /customers              │
-|  │ get_customer      │ http       │ ● read-only │ GET /customers/{customerId} │
-|  │ list_order_events │ http       │ ● read-only │ GET /orders/{id}/events     │
-|  │ run_tests         │ shell      │ • writes    │ npm run test -- {{filter}}  │
-|  │ run_lint          │ shell      │ • writes    │ npm run lint                │
-|  │ run_build         │ shell      │ • writes    │ npm run build               │
-|  │ run_deploy        │ shell      │ ▲ approval  │ npm run deploy              │
-|  │ run_db_migrate    │ shell      │ ▲ approval  │ npm run db:migrate          │
-|  │ run_db_seed       │ shell      │ ▲ approval  │ npm run db:seed             │
-|  │ read_file         │ read_file  │ ● read-only │ .                           │
-|  │ list_files        │ list_files │ ● read-only │ .                           │
-|  │ search_code       │ search     │ ● read-only │ .                           │
-|  └───────────────────┴────────────┴─────────────┴─────────────────────────────┘
+|  ┌─────────────────────┬────────────┬─────────────────────────────┐
+|  │ Tool                │ Kind       │ Binds to                    │
+|  ├─────────────────────┼────────────┼─────────────────────────────┤
+|  │ ● check_health      │ http       │ GET /health                 │
+|  │ ● list_orders       │ http       │ GET /orders                 │
+|  │ ◆ create_order      │ http       │ POST /orders                │
+|  │ ● get_order         │ http       │ GET /orders/{id}            │
+|  │ ■ delete_order      │ http       │ DELETE /orders/{id}         │
+|  │ ■ cancel_order      │ http       │ POST /orders/{id}/cancel    │
+|  │ ● list_customers    │ http       │ GET /customers              │
+|  │ ● get_customer      │ http       │ GET /customers/{customerId} │
+|  │ ● list_order_events │ http       │ GET /orders/{id}/events     │
+|  │ ◆ run_tests         │ shell      │ npm run test -- {{filter}}  │
+|  │ ◆ run_lint          │ shell      │ npm run lint                │
+|  │ ◆ run_build         │ shell      │ npm run build               │
+|  │ ■ run_deploy        │ shell      │ npm run deploy              │
+|  │ ■ run_db_migrate    │ shell      │ npm run db:migrate          │
+|  │ ■ run_db_seed       │ shell      │ npm run db:seed             │
+|  │ ● read_file         │ read_file  │ .                           │
+|  │ ● list_files        │ list_files │ .                           │
+|  │ ● search_code       │ search     │ .                           │
+|  └─────────────────────┴────────────┴─────────────────────────────┘
+|   ● read-only   ◆ writes   ■ destructive, asks first
 |
-|  Subagents
-|    api-investigator · 6 tools · claude-sonnet-5
-|      Delegate questions that need several read-only calls to the acme-orders API (gathering and …
-|    code-investigator · 3 tools · claude-sonnet-5
-|      Delegate broad codebase questions that need reading many files (how a feature works end to …
+|  Model  claude-opus-5 effort high, adaptive thinking
+|  Safety asks before 5 risky tools
+|  Evals  12
 |
-|  Model claude-opus-5 (effort high, adaptive thinking)   Evals 9   Approval destructive (5 gated)
+*  Wrote decree.json · edit it, then run npx decree-harness generate
 |
-*  Wrote decree.json · edit it any time, then run npx decree-harness generate
-|
-o  Wrote agent/  66 created
+o  Wrote agent/  61 created
 |
 |  agent/
 |  ├── claude-code/
-|  │   ├── .claude/ · 10 created
+|  │   ├── .claude/ · 7 created
 |  │   ├── .mcp.json created
 |  │   ├── CLAUDE.md created
 |  │   └── README.md created
@@ -72,39 +69,29 @@ o  Wrote agent/  66 created
 |  │   ├── package.json created
 |  │   ├── README.md created
 |  │   └── tsconfig.json created
-|  ├── python/
-|  │   ├── acme_orders_agent/ · 15 created
-|  │   ├── tests/
-|  │   │   └── test_tools.py created
-|  │   ├── .env.example created
-|  │   ├── pyproject.toml created
-|  │   └── README.md created
-|  ├── typescript/
-|  │   ├── src/ · 15 created
-|  │   ├── .env.example created
-|  │   ├── .gitignore created
-|  │   ├── package.json created
-|  │   ├── README.md created
-|  │   └── tsconfig.json created
+|  ├── python/ · 18 created
+|  ├── typescript/ · 19 created
 |  ├── .decree-generated created
 |  ├── .env.example created
 |  ├── evals.json created
 |  ├── harness.md created
 |  └── README.md created
 |
-o  Next steps -----------------------------------------------------------------+
-|                                                                              |
-|  cd /tmp/claude-0/-home-user-decree-app/e7dd7e69-fc80-59e1-8873-bd84df15989  |
-|  f/scratchpad/site/demo/acme-orders                                          |
-|  npx decree-harness chat                    talk to your agent right now     |
-|  cd agent/typescript && npm i && npm start  run the generated agent          |
-|  npx decree-harness eval                    run the 9 evals                  |
-|  npx decree-harness refine "…"              change the design in plain       |
-|  English                                                                     |
-|  Tip: set ANTHROPIC_API_KEY and run `decree-harness init --force` for a      |
-|  Claude-designed harness.                                                    |
-|                                                                              |
-+------------------------------------------------------------------------------+
+o  Next steps --------------------------------------------------------------+
+|                                                                           |
+|  cd .                                              |
+|  export ANTHROPIC_API_KEY=sk-ant-...        needed to chat, run and eval  |
+|  npx decree-harness chat                    talk to your agent            |
+|  cd agent/typescript && npm i && npm start  run the TypeScript agent      |
+|  npx decree-harness eval                    run the 12 evals              |
+|  npx decree-harness refine "..."            change it in plain English    |
+|                                                                           |
+|  Planned offline. With a key set, `npx decree-harness init --force`       |
+|  re-plans with Claude                                                     |
+|  for a much better harness.                                               |
+|                                                                           |
++---------------------------------------------------------------------------+
 |
-—  Your harness is ready in 0.2s
+—  Ready in 0.2s · next: set ANTHROPIC_API_KEY, then cd . && npx
+   decree-harness chat
 

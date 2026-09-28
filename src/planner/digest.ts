@@ -82,6 +82,7 @@ function renderCore(p: ProjectProfile, b: Budgets): string {
     .filter(([, v]) => v)
     .map(([k]) => k);
   if (cfg.length) facts.push(`Existing agent config: ${cfg.join(", ")}`);
+  if (p.decisionSources?.length) facts.push(`Decision records (served by a get_decisions tool that decree adds after planning): ${p.decisionSources.length} files`);
   if (p.cli) facts.push(`Ships a CLI: \`${p.cli.bin}\` (commands: ${clip(p.cli.commands.join(", "), 300)})`);
   out.push(facts.map((f) => `- ${f}`).join("\n"));
   out.push("");

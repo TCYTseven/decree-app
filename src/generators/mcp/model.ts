@@ -9,6 +9,7 @@ export const MCP_KINDS: ReadonlySet<ToolKind> = new Set<ToolKind>([
   "write_file",
   "list_files",
   "search",
+  "decisions",
 ]);
 
 export const ROOT_ENV = "DECREE_PROJECT_ROOT";

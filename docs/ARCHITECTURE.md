@@ -10,7 +10,8 @@ offline heuristic planner covers runs without an API key.
 
 ```
 scanProject(root)            src/scanner    -> ProjectProfile   (deterministic, no network)
-planHarness(profile, opts)   src/planner    -> HarnessSpec      (Claude, or offline heuristics)
+extractDecisions(root)       src/decisions  -> Decision[]       (ADRs, rules files, post-mortems; deterministic, no network)
+planHarness(profile, opts)   src/planner    -> HarnessSpec      (Claude, or offline heuristics; adds get_decisions when there are decisions)
 validateSpec(json)           src/core/spec  -> normalized HarnessSpec
 generateTargets(spec, ...)   src/generators -> GeneratedFile[]  (pure rendering)
 runAgent(spec, opts)         src/runtime    -> live agent loop against Claude with local tool execution
@@ -25,7 +26,7 @@ coordinating: every module depends on them.
 
 | Path | What |
 |---|---|
-| `decree.json` | The HarnessSpec. Editable source of truth (like mintlify's `docs.json`). |
+| `decree.json` | The HarnessSpec. Editable source of truth (like mintlify's `docs.json`), including the team's `decisions`. |
 | `.decree/profile.json` | Last scan result. |
 | `.decree/manifest.json` | sha256 of every file decree last generated; used to avoid clobbering user edits. |
 | `.decree/memory/` | Backing store for the `memory` tool when running via `decree-harness chat/run`. |
@@ -95,6 +96,21 @@ Every `ToolSpec` has a `kind`. Implementations:
 - **memory**: Anthropic memory tool `{ type: "memory_20250818", name: "memory" }`, client-executed,
   commands `view | create | str_replace | insert | delete | rename`, confined to a memory directory
   (`.decree/memory` for the built-in runtime, `./memories` in generated projects).
+
+- **decisions** (`get_decisions`): input `{ paths: string[], include_proposed?: boolean }` (a bare string is
+  accepted as one path). Serves `spec.decisions` (runtime) or the target's `decisions.json` (TypeScript and MCP:
+  package root; Python: inside the package; Claude Code: `.claude/skills/decisions/`), re-read on every call.
+  Paths and globs are normalized (backslashes to `/`, empty and `.` segments dropped); absolute paths inside the
+  project root are made relative. A glob governs a path when the path matches it (`**` spans `/`, `*` and `?`
+  stay in one segment, `{a,b}` picks a literal alternative, `dir/**` and a plain `dir` also match `dir`) or when
+  the path is a directory holding what the glob names (`src` is governed by `src/db/**`); the repo root is
+  governed by everything. Only `live` decisions are served, plus `proposed` ones with `include_proposed`;
+  `superseded` never. Ranking: the length of the most specific matching glob's literal prefix (without a trailing
+  `/`), then live before proposed, then spec order. At most 8. Output starts with
+  `N decision(s) govern(s) these paths, ...` and has one block per decision (`[id] title`, `Rule:`,
+  `Governs: ... | Source: ...`), then `K more matched but were left out (limit 8). ...` when capped; with no match
+  it is `No live decisions govern these paths.` `src/decisions/glob.ts` + `scope.ts` are the reference; the
+  ports live in `src/generators/common/decisions.ts` and `test/decisions-ports.test.ts` checks they agree.
 
 Server tools (`web_search`, `web_fetch`) and `memory` have empty `inputSchema` in the spec; they are
 declared with their Anthropic type instead of a custom schema.

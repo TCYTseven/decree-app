@@ -665,6 +665,8 @@ CMD_NOTES = {
     "eval": ("Runs each case in <code>evals</code> and checks expected tool calls, text, and the rubric (graded by a Claude judge). Tools are dry-run unless you pass <code>--live-tools</code>.", "$ npx decree-harness eval --filter orders"),
     "doctor": ("Checks Node, the API key, <code>decree.json</code>, env vars the tools need, and the generated output.", "$ npx decree-harness doctor --online"),
     "tools": ("Prints the tool table: kind, safety flags, what each tool binds to and where it came from.", "$ npx decree-harness tools --json"),
+    "decisions": ("The team decisions the agent follows: ADRs, post-mortem lessons and rules from CLAUDE.md, AGENTS.md and Cursor rules. <code>list</code> (the default) shows them, <code>extract</code> re-reads the repo and keeps your statuses, <code>for</code> prints exactly what <code>get_decisions</code> returns for some paths, <code>confirm</code> makes proposed decisions live, and <code>supersede</code> retires one. Changes regenerate the harness when it was generated before.",
+                  "$ npx decree-harness decisions\n$ npx decree-harness decisions for src/db/users.ts\n$ npx decree-harness decisions confirm rule-claude-md-never-write-raw-sql-outside-src\n$ npx decree-harness decisions supersede adr-0002-use-mongodb --by adr-0003-store-events-in-postgres"),
     "schema": ("Prints the JSON schema for <code>decree.json</code>. decree also writes it to <code>.decree/schema.json</code> for editors.", "$ npx decree-harness schema > decree.schema.json"),
 }
 
@@ -674,7 +676,7 @@ def page_commands():
 {h2("Global options")}
 {code(g, "text", "decree-harness --help", copy=False)}
 '''
-    for c in ["init", "scan", "plan", "generate", "refine", "chat", "run", "eval", "doctor", "tools", "schema"]:
+    for c in ["init", "scan", "plan", "generate", "refine", "chat", "run", "eval", "doctor", "tools", "decisions", "schema"]:
         note, ex = CMD_NOTES[c]
         helptxt = read(os.path.join(OUT, f"help-{c}.txt")).rstrip()
         body += f'''{h2(c, c, code_title=True)}
@@ -684,7 +686,7 @@ def page_commands():
 '''
     return doc_page("commands.html", "commands", "Commands",
                     "Every command and flag, taken from the CLI's own help output.", body,
-                    "decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, schema.")
+                    "decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, schema.")
 
 DESC = {
  "$schema": "Path to the JSON schema. decree writes <code>./.decree/schema.json</code> so editors can validate and autocomplete.",
@@ -702,6 +704,7 @@ DESC = {
  "evals": "Eval cases. See <a href=\"#evals\">evals</a>.",
  "targets": "What <code>generate</code> renders.",
  "env": "Environment variables the harness reads. Written to <code>.env.example</code> and checked by <code>doctor</code>.",
+ "decisions": "Team decisions served by <code>get_decisions</code>. Optional. See <a href=\"#decisions\">decisions</a>.",
  "provenance": "Written by decree: planner type (<code>heuristic</code> or <code>llm</code>), decree version, timestamp and planner notes.",
  "model.id": "Model for the main agent.",
  "model.effort": "Sent as <code>output_config.effort</code>.",
@@ -765,6 +768,15 @@ DESC = {
  "env[].required": "<code>doctor</code> warns when it is missing.",
  "env[].secret": "Marks the value as a secret.",
  "env[].default": "Default value.",
+ "decisions[].id": "Stable lowercase slug, unique in the spec. Other commands take it, and the agent cites it.",
+ "decisions[].title": "Short name.",
+ "decisions[].constraint": "The rule the agent must follow, in 1 to 3 sentences.",
+ "decisions[].status": "<code>live</code> is served to the agent, <code>proposed</code> waits for <code>decisions confirm</code>, <code>superseded</code> is kept for history.",
+ "decisions[].governs": "Globs relative to the repo root. <code>**</code> spans directories, <code>*</code> stays in one; <code>dir/**</code> also matches <code>dir</code>. <code>**</code> alone covers the whole repo.",
+ "decisions[].source": "Where it is written down, for example <code>docs/adr/0003-use-postgres.md</code> or <code>CLAUDE.md:14</code>.",
+ "decisions[].owner": "Person or team that owns it.",
+ "decisions[].supersededBy": "Id of the decision that replaced it. Must exist.",
+ "decisions[].rationale": "Why the team decided it.",
 }
 
 def fmt_type(v):
@@ -820,6 +832,7 @@ def page_config():
     ev = P["evals"]["items"]
     ev_rows = rows_for(ev, "evals[].") + rows_for(ev["properties"]["expect"], "evals[].expect.")
     env_rows = rows_for(P["env"]["items"], "env[].")
+    dec_rows = rows_for(P["decisions"]["items"], "decisions[].")
     model_rows = rows_for(P["model"], "model.")
     blocked = ", ".join(f"<code>{esc(b)}</code>" for b in gr["properties"]["blockedCommands"]["default"])
     kinds = [
@@ -832,6 +845,7 @@ def page_config():
         ("web_search", "Anthropic server tool, up to 5 uses per request."),
         ("web_fetch", "Anthropic server tool, up to 5 uses per request."),
         ("memory", "Anthropic memory tool, confined to a memory directory."),
+        ("decisions", "<code>get_decisions</code>: returns the live entries of <code>decisions</code> whose globs match the paths the agent passes, most specific first, at most 8. Added automatically when the spec has decisions."),
     ]
     snippet, _ = decree_snippet()
     body = f'''<p><code>decree.json</code> lives at the root of your project. <code>init</code> and <code>plan</code> write it, <code>refine</code> changes it, <code>generate</code> renders it, and <code>chat</code>, <code>run</code> and <code>eval</code> execute it. It is validated on every load. Print the full schema with <code>decree-harness schema</code>.</p>
@@ -876,6 +890,10 @@ def page_config():
 {h2("env")}
 {fields(env_rows)}
 
+{h2("decisions")}
+<p>The decisions your team already made, extracted by <code>init</code> and <code>decisions extract</code> from ADRs, post-mortems and agent rules files. Old <code>decree.json</code> files without this field load unchanged. Ids must be unique, and <code>supersededBy</code> must name another decision.</p>
+{fields(dec_rows)}
+
 {h2("provenance")}
 <p>Written by decree; you do not need to edit it. <code>generator</code> is <code>heuristic</code> for offline plans and <code>llm</code> for Claude plans, and <code>notes</code> records the planner's reasoning, for example which scripts were skipped and why.</p>
 '''
@@ -894,6 +912,9 @@ def page_targets():
  ["<code>agent/.env.example</code>", "Env vars the tools need."],
  ["<code>agent/.decree-generated</code>", "Marker file. decree's file tools and scanner skip this directory."],
 ])}
+
+{h2("Team decisions", "decisions")}
+<p>When <code>decree.json</code> has decisions, every target gets a read-only <code>get_decisions</code> tool with the same matching rules, and a <code>decisions.json</code> written from the spec: <code>agent/typescript/decisions.json</code>, <code>agent/python/&lt;package&gt;/decisions.json</code>, <code>agent/mcp-server/decisions.json</code> and <code>agent/claude-code/.claude/skills/decisions/decisions.json</code>. The tool re-reads the file on every call.</p>
 
 {h2("TypeScript", "typescript")}
 <p>A standalone agent on the Anthropic TypeScript SDK (<code>@anthropic-ai/sdk</code>). Streaming agent loop, the tool registry, subagents, a CLI with a REPL, and an eval runner.</p>
@@ -927,6 +948,7 @@ $ claude mcp add acme-orders-agent -- npx tsx /abs/path/to/agent/mcp-server/src/
 <p>Project configuration for Claude Code: a <code>CLAUDE.md</code> with working rules, the main agent and subagents in <code>.claude/agents/</code>, skills, slash commands, a <code>settings.json</code> with permissions, and a <code>.mcp.json</code> that starts the generated MCP server for API tools.</p>
 {code("$ cp -R agent/claude-code/CLAUDE.md agent/claude-code/.claude agent/claude-code/.mcp.json .")}
 <p>Merge by hand if you already have these files. Then run <code>claude --agent acme-orders-agent</code>, or ask Claude Code to use the agent.</p>
+<p>When the spec has decisions, <code>CLAUDE.md</code> tells Claude to look up the ones that govern the files it is about to change and lists none of them. It calls <code>get_decisions</code> on the generated MCP server when that target is generated too; otherwise it runs <code>node .claude/skills/decisions/get-decisions.mjs &lt;paths&gt;</code>, a dependency-free script next to a <code>decisions.json</code>.</p>
 <p>Permissions map from the harness flags: read-only tools and checks go to <code>allow</code>, destructive tools to <code>ask</code>, and blocked commands to <code>deny</code>. Shell rules with a generic prefix such as <code>npm run</code>, <code>npx</code> or <code>make</code> alone always go to <code>ask</code>, never <code>allow</code>.</p>
 {code(json.dumps({"permissions": {"allow": ["mcp__acme-orders-agent__list_orders", "Bash(npm run test:*)", "Read", "Glob", "Grep"], "ask": ["mcp__acme-orders-agent__delete_order", "Bash(npm run deploy:*)"], "deny": ["Bash(git push --force:*)", "Bash(*git push --force*)"]}}, indent=2), "json", ".claude/settings.json (excerpt)", copy=False)}
 '''

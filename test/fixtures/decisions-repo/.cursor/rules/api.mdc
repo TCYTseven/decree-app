@@ -1,0 +1,8 @@
+---
+description: HTTP API conventions
+globs: src/api/**/*.ts
+alwaysApply: false
+---
+
+- Always validate the request body with zod before it reaches a handler.
+- Return errors as `{ "error": string }` with a 4xx or 5xx status; never leak stack traces to clients.

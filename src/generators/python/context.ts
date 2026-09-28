@@ -19,6 +19,7 @@ export interface PyContext {
     shell: boolean;
     fs: boolean;
     memory: boolean;
+    decisions: boolean;
     subagents: boolean;
     serverTools: boolean;
     evals: boolean;
@@ -74,6 +75,7 @@ export function buildContext(spec: HarnessSpec, opts: GenerateOptions): PyContex
       shell: kinds.has("shell"),
       fs: [...kinds].some((k) => FS_KINDS.has(k)),
       memory: kinds.has("memory"),
+      decisions: kinds.has("decisions"),
       subagents: subagents.length > 0,
       serverTools: [...kinds].some((k) => SERVER_KINDS.has(k)),
       evals: spec.evals.length > 0,

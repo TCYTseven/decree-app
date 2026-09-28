@@ -240,6 +240,26 @@ describe("spec read/write", () => {
     expect(JSON.parse(await fs.readFile(path.join(root, "decree.json"), "utf8")).goal).toBe("edited in vim");
   });
 
+  it("confirms a proposed decision from the Decisions view and keeps get_decisions in place", async () => {
+    const decisions = [
+      { id: "adr-0001-db", title: "Database", constraint: "Only src/db writes SQL.", status: "live", governs: ["src/db/**"], source: "docs/adr/0001-db.md" },
+      { id: "rule-claude-md-no-floats", title: "No floats", constraint: "Never use floats for money.", status: "proposed", governs: ["**"], source: "CLAUDE.md:4" },
+    ];
+    await fs.writeFile(path.join(root, "decree.json"), stringifySpec({ ...sampleSpec(), decisions } as never));
+    await start();
+    const { hash, spec } = (await req("GET", "/api/state")).json();
+    expect(spec.decisions).toHaveLength(2);
+    const next = decisions.map((d) => (d.id === "rule-claude-md-no-floats" ? { ...d, status: "live" } : d));
+    const r = await req("PATCH", "/api/spec", { body: { patch: { decisions: next }, baseHash: hash } });
+    expect(r.status).toBe(200);
+    const saved = JSON.parse(await fs.readFile(path.join(root, "decree.json"), "utf8"));
+    expect(saved.decisions[1].status).toBe("live");
+    expect(saved.tools.at(-1)).toMatchObject({ name: "get_decisions", kind: "decisions" });
+    expect(saved.systemPrompt).toContain("get_decisions");
+    const bad = await req("PATCH", "/api/spec", { body: { patch: { decisions: [{ ...decisions[0], status: "maybe" }] } } });
+    expect(bad.status).toBe(422);
+  });
+
   it("patchSpecFile works without a server", async () => {
     const r = await patchSpecFile(root, { goal: "Ship it" });
     expect(r.ok).toBe(true);

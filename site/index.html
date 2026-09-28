@@ -64,11 +64,11 @@
     <div class="term-body" tabindex="0" role="region" aria-label="Terminal output"><pre id="term-init" role="tabpanel" aria-labelledby="term-init-tab"><span class="ln"><span class="t-g">❯</span> <span class="t-cmd" data-type>npx decree-harness init --yes --offline --targets all</span>
 </span><span class="ln"><span class="t-r">T</span>   <span class="t-bold">decree</span>  <span class="t-dim">v0.1.0 · agent harness generator</span>
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln"><span class="t-g">o</span>  Project acme-orders
+</span><span class="ln"><span class="t-g">o</span>  Project demo .
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln" data-pause="420"><span class="t-g">*</span>  Scanned acme-orders · 16 files <span class="t-dim">86ms</span>
+</span><span class="ln" data-pause="420"><span class="t-g">*</span>  Scanned acme-orders · 16 files <span class="t-dim">75ms</span>
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln"><span class="t-g">o</span>  acme-orders <span class="t-dim">----------------------------------------</span><span class="t-dim">+</span>
+</span><span class="ln"><span class="t-g">o</span>  Found in acme-orders <span class="t-dim">-------------------------------</span><span class="t-dim">+</span>
 </span><span class="ln"><span class="t-dim">|</span>                                                      |
 </span><span class="ln" data-pause="60"><span class="t-dim">|</span>  Stack         TypeScript · npm                      |
 </span><span class="ln"><span class="t-dim">|</span>  Frameworks    express                               |
@@ -77,55 +77,52 @@
 </span><span class="ln"><span class="t-dim">|</span>  Env vars      6 (2 secret)                          |
 </span><span class="ln"><span class="t-dim">|</span>  Database      prisma (3 models)                     |
 </span><span class="ln"><span class="t-dim">|</span>  Agent config  none                                  |
-</span><span class="ln"><span class="t-dim">|</span>  Files         16 scanned in 86ms                    |
 </span><span class="ln"><span class="t-dim">|</span>                                                      |
 </span><span class="ln"><span class="t-dim">+</span><span class="t-dim">------------------------------------------------------</span><span class="t-dim">+</span>
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln" data-pause="300"><span class="t-b">•</span>  Goal <span class="t-dim">›</span> Operate the orders API and triage test failures
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln" data-pause="650"><span class="t-g">*</span>  Planned Acme Orders Agent · 18 tools · 2 subagents · 9 evals <span class="t-dim">30ms</span>
+</span><span class="ln" data-pause="650"><span class="t-g">*</span>  Planned Acme Orders Agent · 18 tools · 0 subagents · 12 evals <span class="t-dim">37ms</span>
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln"><span class="t-dim">|</span>  Acme Orders Agent (acme-orders-agent)
-</span><span class="ln"><span class="t-dim">|</span>  Acme Orders Agent for acme-orders (Acme orders service: REST API for orders and customers): Operate the orders API and triage test failures.
+</span><span class="ln"><span class="t-dim">|</span>  Acme Orders Agent for acme-orders (Acme orders service: REST API for orders and customers):
+</span><span class="ln"><span class="t-dim">|</span>  Operate the orders API and triage test failures.
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">┌───────────────────┬────────────┬─────────────┬─────────────────────────────┐</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> Tool              <span class="t-dim">│</span> Kind       <span class="t-dim">│</span> Safety      <span class="t-dim">│</span> Binds to                    <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├───────────────────┼────────────┼─────────────┼─────────────────────────────┤</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> get_health        <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /health                 <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> list_orders       <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /orders                 <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> create_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-b">• writes</span>    <span class="t-dim">│</span> <span class="t-c">POST</span> /orders                <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> get_order         <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}            <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> delete_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> <span class="t-c">DELETE</span> /orders/{id}         <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> cancel_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> <span class="t-c">POST</span> /orders/{id}/cancel    <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> list_customers    <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /customers              <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> get_customer      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /customers/{customerId} <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> list_order_events <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}/events     <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_tests         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>    <span class="t-dim">│</span> npm run test -- {{filter}}  <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_lint          <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>    <span class="t-dim">│</span> npm run lint                <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_build         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>    <span class="t-dim">│</span> npm run build               <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_deploy        <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> npm run deploy              <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_db_migrate    <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> npm run db:migrate          <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> run_db_seed       <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval</span>  <span class="t-dim">│</span> npm run db:seed             <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> read_file         <span class="t-dim">│</span> read_file  <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> list_files        <span class="t-dim">│</span> list_files <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> search_code       <span class="t-dim">│</span> search     <span class="t-dim">│</span> <span class="t-g">● read-only</span> <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">└───────────────────┴────────────┴─────────────┴─────────────────────────────┘</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">┌─────────────────────┬────────────┬─────────────────────────────┐</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> Tool                <span class="t-dim">│</span> Kind       <span class="t-dim">│</span> Binds to                    <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├─────────────────────┼────────────┼─────────────────────────────┤</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● check_health      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /health                 <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● list_orders       <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /orders                 <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ◆ create_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">POST</span> /orders                <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● get_order         <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}            <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ■ delete_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">DELETE</span> /orders/{id}         <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ■ cancel_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">POST</span> /orders/{id}/cancel    <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● list_customers    <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /customers              <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● get_customer      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /customers/{customerId} <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● list_order_events <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}/events     <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ◆ run_tests         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run test -- {{filter}}  <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ◆ run_lint          <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run lint                <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ◆ run_build         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run build               <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ■ run_deploy        <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run deploy              <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ■ run_db_migrate    <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run db:migrate          <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ■ run_db_seed       <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run db:seed             <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● read_file         <span class="t-dim">│</span> read_file  <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● list_files        <span class="t-dim">│</span> list_files <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span> ● search_code       <span class="t-dim">│</span> search     <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">└─────────────────────┴────────────┴─────────────────────────────┘</span>
+</span><span class="ln"><span class="t-dim">|</span>   <span class="t-g">● read-only</span>   ◆ writes   ■ destructive, asks first
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln"><span class="t-dim">|</span>  Subagents
-</span><span class="ln"><span class="t-dim">|</span>    api-investigator · 6 tools · claude-sonnet-5
-</span><span class="ln"><span class="t-dim">|</span>      Delegate questions that need several read-only calls to the acme-orders API (gathering and …
-</span><span class="ln"><span class="t-dim">|</span>    code-investigator · 3 tools · claude-sonnet-5
-</span><span class="ln"><span class="t-dim">|</span>      Delegate broad codebase questions that need reading many files (how a feature works end to …
+</span><span class="ln"><span class="t-dim">|</span>  Model  claude-opus-5 effort high, adaptive thinking
+</span><span class="ln"><span class="t-dim">|</span>  Safety asks before 5 risky tools
+</span><span class="ln"><span class="t-dim">|</span>  Evals  12
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln"><span class="t-dim">|</span>  Model claude-opus-5 (effort high, adaptive thinking)   Evals 9   Approval destructive (5 gated)
+</span><span class="ln" data-pause="300"><span class="t-g">*</span>  Wrote decree.json · edit it, then run npx decree-harness generate
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln" data-pause="300"><span class="t-g">*</span>  Wrote decree.json · edit it any time, then run npx decree-harness generate
-</span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln" data-pause="350"><span class="t-g">o</span>  Wrote agent/  66 <span class="t-dim">created</span>
+</span><span class="ln" data-pause="350"><span class="t-g">o</span>  Wrote agent/  61 <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln"><span class="t-dim">|</span>  agent/
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> claude-code/
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .claude/ · 10 <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .claude/ · 7 <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .mcp.json <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> CLAUDE.md <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">└──</span> README.md <span class="t-dim">created</span>
@@ -136,74 +133,64 @@
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> package.json <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> README.md <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">└──</span> tsconfig.json <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> python/
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> acme_orders_agent/ · 15 <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> tests/
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">│</span>   <span class="t-dim">└──</span> test_tools.py <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .env.example <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> pyproject.toml <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">└──</span> README.md <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> typescript/
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> src/ · 15 <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .env.example <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> .gitignore <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> package.json <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">├──</span> README.md <span class="t-dim">created</span>
-</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">│</span>   <span class="t-dim">└──</span> tsconfig.json <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> python/ · 18 <span class="t-dim">created</span>
+</span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> typescript/ · 19 <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> .decree-generated <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> .env.example <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> evals.json <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">├──</span> harness.md <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>  <span class="t-dim">└──</span> README.md <span class="t-dim">created</span>
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln" data-pause="200"><span class="t-g">o</span>  Next steps <span class="t-dim">-----------------------------------------------------------------</span><span class="t-dim">+</span>
-</span><span class="ln"><span class="t-dim">|</span>                                                                              |
-</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness chat                    talk to your agent right now     |
-</span><span class="ln"><span class="t-dim">|</span>  cd agent/typescript &amp;&amp; npm i &amp;&amp; npm start  run the generated agent          |
-</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness eval                    run the 9 evals                  |
-</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness refine "…"              change the design in plain       |
-</span><span class="ln"><span class="t-dim">|</span>  English                                                                     |
-</span><span class="ln"><span class="t-dim">|</span>  Tip: set ANTHROPIC_API_KEY and run `decree-harness init --force` for a      |
-</span><span class="ln"><span class="t-dim">|</span>  Claude-designed harness.                                                    |
-</span><span class="ln"><span class="t-dim">|</span>                                                                              |
-</span><span class="ln"><span class="t-dim">+</span><span class="t-dim">------------------------------------------------------------------------------</span><span class="t-dim">+</span>
+</span><span class="ln" data-pause="200"><span class="t-g">o</span>  Next steps <span class="t-dim">--------------------------------------------------------------</span><span class="t-dim">+</span>
+</span><span class="ln"><span class="t-dim">|</span>                                                                           |
+</span><span class="ln"><span class="t-dim">|</span>  cd .                                              |
+</span><span class="ln"><span class="t-dim">|</span>  export ANTHROPIC_API_KEY=sk-ant-...        needed to chat, run and eval  |
+</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness chat                    talk to your agent            |
+</span><span class="ln"><span class="t-dim">|</span>  cd agent/typescript &amp;&amp; npm i &amp;&amp; npm start  run the TypeScript agent      |
+</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness eval                    run the 12 evals              |
+</span><span class="ln"><span class="t-dim">|</span>  npx decree-harness refine "..."            change it in plain English    |
+</span><span class="ln"><span class="t-dim">|</span>                                                                           |
+</span><span class="ln" data-pause="650"><span class="t-dim">|</span>  Planned offline. With a key set, `npx decree-harness init --force`       |
+</span><span class="ln"><span class="t-dim">|</span>  re-plans with Claude                                                     |
+</span><span class="ln"><span class="t-dim">|</span>  for a much better harness.                                               |
+</span><span class="ln"><span class="t-dim">|</span>                                                                           |
+</span><span class="ln"><span class="t-dim">+</span><span class="t-dim">---------------------------------------------------------------------------</span><span class="t-dim">+</span>
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln" data-pause="250"><span class="t-dim">—</span>  Your harness is ready in <span class="t-dim">0.2s</span>
+</span><span class="ln"><span class="t-dim">—</span>  Ready in 0.2s · next: set ANTHROPIC_API_KEY, then cd . &amp;&amp; npx
+</span><span class="ln">   decree-harness chat
 </span><span class="ln"><span class="t-g">❯</span> <span class="t-caret"></span></span></pre><pre id="term-tools" role="tabpanel" aria-labelledby="term-tools-tab" hidden><span class="ln"><span class="t-g">❯</span> <span class="t-cmd" data-type>npx decree-harness tools</span>
-</span><span class="ln">Acme Orders Agent · 18 tools · approval mode: destructive
-</span><span class="ln"><span class="t-dim">┌───────────────────┬────────────┬─────────────────────┬─────────────────────┬─────────────────────┐</span>
-</span><span class="ln"><span class="t-dim">│</span> Tool              <span class="t-dim">│</span> Kind       <span class="t-dim">│</span> Flags               <span class="t-dim">│</span> Binds to            <span class="t-dim">│</span> Source              <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">├───────────────────┼────────────┼─────────────────────┼─────────────────────┼─────────────────────┤</span>
-</span><span class="ln"><span class="t-dim">│</span> get_health        <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /health         <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /health <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> list_orders       <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /orders         <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /orders <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> create_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-b">• writes</span>            <span class="t-dim">│</span> <span class="t-c">POST</span> /orders        <span class="t-dim">│</span> openapi:<span class="t-c">POST</span> /orde… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> get_order         <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}    <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /order… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> delete_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> <span class="t-c">DELETE</span> /orders/{id} <span class="t-dim">│</span> openapi:<span class="t-c">DELETE</span> /or… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> cancel_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> <span class="t-c">POST</span> /orders/{id}/… <span class="t-dim">│</span> openapi:<span class="t-c">POST</span> /orde… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> list_customers    <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /customers      <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /custo… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> get_customer      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /customers/{cu… <span class="t-dim">│</span> openapi:<span class="t-c">GET</span> /custo… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> list_order_events <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}/e… <span class="t-dim">│</span> route:<span class="t-c">GET</span> /orders/… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> run_tests         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>            <span class="t-dim">│</span> npm run test -- {{… <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> run_lint          <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>            <span class="t-dim">│</span> npm run lint        <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> run_build         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-b">• writes</span>            <span class="t-dim">│</span> npm run build       <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> run_deploy        <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> npm run deploy      <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> run_db_migrate    <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> npm run db:migrate  <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> run_db_seed       <span class="t-dim">│</span> shell      <span class="t-dim">│</span> <span class="t-a"><span class="t-a">▲</span> approval destruc…</span> <span class="t-dim">│</span> npm run db:seed     <span class="t-dim">│</span> package.json#scrip… <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> read_file         <span class="t-dim">│</span> read_file  <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> .                   <span class="t-dim">│</span> builtin             <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> list_files        <span class="t-dim">│</span> list_files <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> .                   <span class="t-dim">│</span> builtin             <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">│</span> search_code       <span class="t-dim">│</span> search     <span class="t-dim">│</span> <span class="t-g">● read-only</span>         <span class="t-dim">│</span> .                   <span class="t-dim">│</span> builtin             <span class="t-dim">│</span>
-</span><span class="ln"><span class="t-dim">└───────────────────┴────────────┴─────────────────────┴─────────────────────┴─────────────────────┘</span>
-</span><span class="ln">
-</span><span class="ln" data-pause="150">Subagents
-</span><span class="ln">  api-investigator <span class="t-dim">›</span> get_health, list_orders, get_order, list_customers, get_customer, list_order_events
-</span><span class="ln">  code-investigator <span class="t-dim">›</span> read_file, list_files, search_code
+</span><span class="ln">Acme Orders Agent · 18 tools · asks before 5 risky tools
+</span><span class="ln"><span class="t-dim">┌─────────────────────┬────────────┬─────────────────────────────┐</span>
+</span><span class="ln"><span class="t-dim">│</span> Tool                <span class="t-dim">│</span> Kind       <span class="t-dim">│</span> Binds to                    <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">├─────────────────────┼────────────┼─────────────────────────────┤</span>
+</span><span class="ln"><span class="t-dim">│</span> ● check_health      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /health                 <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ● list_orders       <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /orders                 <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ◆ create_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">POST</span> /orders                <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ● get_order         <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}            <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ■ delete_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">DELETE</span> /orders/{id}         <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ■ cancel_order      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">POST</span> /orders/{id}/cancel    <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ● list_customers    <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /customers              <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ● get_customer      <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /customers/{customerId} <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ● list_order_events <span class="t-dim">│</span> http       <span class="t-dim">│</span> <span class="t-c">GET</span> /orders/{id}/events     <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ◆ run_tests         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run test -- {{filter}}  <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ◆ run_lint          <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run lint                <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ◆ run_build         <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run build               <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ■ run_deploy        <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run deploy              <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ■ run_db_migrate    <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run db:migrate          <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ■ run_db_seed       <span class="t-dim">│</span> shell      <span class="t-dim">│</span> npm run db:seed             <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ● read_file         <span class="t-dim">│</span> read_file  <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ● list_files        <span class="t-dim">│</span> list_files <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">│</span> ● search_code       <span class="t-dim">│</span> search     <span class="t-dim">│</span> .                           <span class="t-dim">│</span>
+</span><span class="ln"><span class="t-dim">└─────────────────────┴────────────┴─────────────────────────────┘</span>
+</span><span class="ln"> <span class="t-g">● read-only</span>   ◆ writes   ■ destructive, asks first
 </span><span class="ln"><span class="t-g">❯</span> <span class="t-caret"></span></span></pre><pre id="term-doctor" role="tabpanel" aria-labelledby="term-doctor-tab" hidden><span class="ln"><span class="t-g">❯</span> <span class="t-cmd" data-type>npx decree-harness doctor</span>
 </span><span class="ln"><span class="t-r">T</span>   <span class="t-bold">decree</span>  <span class="t-dim">v0.1.0 · doctor</span>
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln" data-pause="250"><span class="t-dim">|</span>  <span class="t-g">✓</span> Node.js            v22.22.2
 </span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-a">▲</span> Anthropic API key  not set
-</span><span class="ln"><span class="t-dim">|</span>                       export ANTHROPIC_API_KEY=… (or add it to .env). Needed for Claude planning, chat, run and eval.
-</span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-g">✓</span> decree.json        18 tools, 2 subagents, 9 evals
+</span><span class="ln"><span class="t-dim">|</span>                       export ANTHROPIC_API_KEY=sk-ant-... (or add it to .env). Needed to plan
+</span><span class="ln"><span class="t-dim">|</span>                       with Claude, chat, run and eval.
+</span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-g">✓</span> decree.json        18 tools, 0 subagents, 12 evals
 </span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-a">▲</span> Tool env vars      missing ACME_API_TOKEN
 </span><span class="ln"><span class="t-dim">|</span>                       Tools that need them will fail at runtime. Set them in your shell or .env.
 </span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-g">✓</span> Generated code     agent/ (typescript, python, mcp, claude-code)
@@ -263,7 +250,7 @@
     <div class="section-head">
       <span class="sec-num">§ 2 &nbsp;What you get</span>
       <h2 id="targets-title" class="h2">Four targets from the same spec.</h2>
-      <p>Pick any combination with <code>--targets typescript,python,mcp,claude-code</code> or <code>all</code>. On the orders fixture above, <code>--targets all</code> wrote 18 tools, 2 subagents and 9 evals into 66 files under <code>agent/</code>.</p>
+      <p>Pick any combination with <code>--targets typescript,python,mcp,claude-code</code> or <code>all</code>. On the orders fixture above, <code>--targets all</code> wrote 18 tools, 0 subagents and 12 evals into 66 files under <code>agent/</code>.</p>
     </div>
     <div class="targets">
       <article class="target">
@@ -369,7 +356,7 @@ src/harness.ts   config.ts</div>
   <span class="c-key">"tools"</span>: [
     {
       <span class="c-key">"name"</span>: <span class="c-str">"delete_order"</span>,
-      <span class="c-key">"description"</span>: <span class="c-str">"Permanently delete an order. Calls DELETE /orders/{id}. …"</span>,
+      <span class="c-key">"description"</span>: <span class="c-str">"Permanently delete an order (DELETE /orders/{id}). Calls DELETE /orders/{id}. …"</span>,
       <span class="c-key">"kind"</span>: <span class="c-str">"http"</span>,
       <span class="c-key">"inputSchema"</span>: {
         <span class="c-key">"type"</span>: <span class="c-str">"object"</span>,
@@ -399,7 +386,7 @@ src/harness.ts   config.ts</div>
   },
   <span class="c-key">"targets"</span>: [ <span class="c-str">"typescript"</span>, <span class="c-str">"python"</span>, <span class="c-str">"mcp"</span>, <span class="c-str">"claude-code"</span> ]
 }</code></pre></div>
-      <p class="code-cap">From the fixture run above. The full file has 18 tools, 2 subagents, 9 evals and the env var list.</p>
+      <p class="code-cap">From the fixture run above. The full file has 18 tools, 0 subagents, 12 evals and the env var list.</p>
     </div>
   </div>
 </section>

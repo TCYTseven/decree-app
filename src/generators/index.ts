@@ -25,9 +25,10 @@ const GENERATORS = {
  */
 export function generateTargets(spec: HarnessSpec, targets: Target[], opts: GenerateOptions): GeneratedFile[] {
   const files: GeneratedFile[] = [...generateCommon(spec, opts)];
+  const withTargets: GenerateOptions = { ...opts, targets: opts.targets ?? targets };
   for (const target of targets) {
     const dir = TARGET_DIRS[target];
-    for (const f of GENERATORS[target](spec, opts)) {
+    for (const f of GENERATORS[target](spec, withTargets)) {
       files.push({ ...f, path: `${dir}/${f.path}` });
     }
   }

@@ -3,27 +3,32 @@
   "type": "object",
   "properties": {
     "$schema": {
+      "description": "Path or URL of this JSON Schema, for editor support.",
       "type": "string"
     },
     "version": {
       "default": 1,
+      "description": "Spec format version.",
       "type": "number",
       "const": 1
     },
     "name": {
       "type": "string",
       "minLength": 1,
-      "description": "kebab-case slug"
+      "description": "kebab-case slug for the agent, used for package and command names."
     },
     "displayName": {
+      "description": "Human-readable agent name.",
       "type": "string"
     },
     "description": {
       "default": "",
+      "description": "One sentence: what this agent does.",
       "type": "string"
     },
     "goal": {
       "default": "",
+      "description": "What the agent is for, in the user's words. `decree-harness plan` designs the harness around it.",
       "type": "string"
     },
     "model": {
@@ -33,10 +38,12 @@
         "subagentId": "claude-sonnet-5",
         "thinking": "adaptive"
       },
+      "description": "Which models run the agent and how hard they think.",
       "type": "object",
       "properties": {
         "id": {
           "default": "claude-opus-5",
+          "description": "Model for the main agent, e.g. claude-opus-5. Use the id without a date suffix.",
           "type": "string",
           "minLength": 1
         },
@@ -49,15 +56,18 @@
             "high",
             "xhigh",
             "max"
-          ]
+          ],
+          "description": "Reasoning effort (output_config.effort): higher is more thorough and more expensive. \"medium\" suits lookup/Q&A agents, \"high\" coding and multi-step work."
         },
         "subagentId": {
           "default": "claude-sonnet-5",
+          "description": "Default model for subagents (usually a cheaper one).",
           "type": "string",
           "minLength": 1
         },
         "thinking": {
           "default": "adaptive",
+          "description": "\"adaptive\" lets the model decide when and how much to think.",
           "type": "string",
           "enum": [
             "adaptive",
@@ -68,20 +78,24 @@
     },
     "systemPrompt": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "Markdown system prompt for the main agent: role, job and scope, project facts (stack, tests, API base URL, auth, domain), how to work, tool guidance by exact tool name, safety, and response style. Calm and specific; under about 700 words."
     },
     "tools": {
       "default": [],
+      "description": "The agent's tools, in a stable order (it forms the prompt-cache prefix). Prefer a few sharp tools over many overlapping ones.",
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "verb_noun snake_case name the model calls, e.g. list_orders or cancel_order. Must be unique; avoid numeric suffixes."
           },
           "description": {
             "default": "",
+            "description": "Written for the model, 1-4 sentences: what the tool does, when to use it (and when a sibling tool fits better), what it returns, and caveats such as pagination or irreversibility.",
             "type": "string"
           },
           "kind": {
@@ -95,8 +109,10 @@
               "search",
               "web_search",
               "web_fetch",
-              "memory"
-            ]
+              "memory",
+              "decisions"
+            ],
+            "description": "How the tool runs: http calls the project's API; shell runs a fixed command template; read_file/write_file/list_files/search work on files under fs.root; web_search, web_fetch and memory are Anthropic-provided tools; decisions serves the entries of `decisions` that govern the paths the agent passes."
           },
           "inputSchema": {
             "type": "object",
@@ -104,7 +120,7 @@
               "type": "string"
             },
             "additionalProperties": {},
-            "description": "JSON Schema (type: object) for the tool input"
+            "description": "JSON Schema for the tool input: {\"type\": \"object\", \"properties\": {...}, \"required\": [...]}. Give every property a type (or enum) and a description with an example value; the model fills inputs from these. Leave empty for web_search, web_fetch and memory."
           },
           "http": {
             "type": "object",
@@ -119,37 +135,43 @@
                   "DELETE",
                   "HEAD",
                   "OPTIONS"
-                ]
+                ],
+                "description": "HTTP method. Anything but GET/HEAD/OPTIONS changes state, so the tool cannot be readOnly."
               },
               "baseUrlEnv": {
-                "description": "Env var holding the base URL; defaults to <NAME>_BASE_URL",
+                "description": "Env var holding the API base URL, e.g. ACME_BASE_URL; defaults to <NAME>_BASE_URL.",
                 "type": "string",
                 "minLength": 1
               },
               "defaultBaseUrl": {
+                "description": "Base URL used when baseUrlEnv is unset, e.g. http://localhost:3000.",
                 "type": "string"
               },
               "path": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Path template, e.g. /users/{id}"
+                "description": "Path template appended to the base URL, e.g. /articles/{slug}. Each {name} is filled from the input property of the same name (URL-encoded)."
               },
               "queryParams": {
+                "description": "Input properties sent as query-string parameters, e.g. [\"limit\", \"offset\"].",
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
               "headerParams": {
+                "description": "Input properties sent as request headers, e.g. [\"Idempotency-Key\"].",
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
               "bodyParam": {
+                "description": "Input property whose value is sent as the whole JSON body. When omitted, POST/PUT/PATCH/DELETE send every input not used by the path, query or headers.",
                 "type": "string"
               },
               "auth": {
+                "description": "How the tool authenticates to the API.",
                 "type": "object",
                 "properties": {
                   "type": {
@@ -158,12 +180,15 @@
                       "bearer",
                       "header",
                       "none"
-                    ]
+                    ],
+                    "description": "bearer sends `Authorization: Bearer <value>`; header sends `<header>: <value>`; none sends no credential."
                   },
                   "env": {
+                    "description": "Env var holding the credential, e.g. ACME_API_TOKEN. Its value is redacted from tool output.",
                     "type": "string"
                   },
                   "header": {
+                    "description": "Header name when type is \"header\", e.g. X-API-Key.",
                     "type": "string"
                   }
                 },
@@ -175,7 +200,8 @@
             "required": [
               "method",
               "path"
-            ]
+            ],
+            "description": "Binding for kind \"http\": which endpoint the tool calls and how inputs map onto the request."
           },
           "shell": {
             "type": "object",
@@ -183,12 +209,14 @@
               "command": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Command template; {{param}} placeholders are shell-escaped"
+                "description": "Fixed command template, e.g. \"npm run test -- {{filter}}\". {{param}} placeholders are shell-escaped input values and must be bare words, never inside quotes."
               },
               "cwd": {
+                "description": "Working directory relative to the project root; defaults to \".\".",
                 "type": "string"
               },
               "timeoutMs": {
+                "description": "Kill the command after this many milliseconds (default 120000).",
                 "type": "integer",
                 "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
@@ -196,68 +224,83 @@
             },
             "required": [
               "command"
-            ]
+            ],
+            "description": "Binding for kind \"shell\": the command the tool runs."
           },
           "fs": {
             "type": "object",
             "properties": {
               "root": {
                 "default": ".",
+                "description": "Directory the file tool is confined to, relative to the project root.",
                 "type": "string",
                 "minLength": 1
               },
               "maxBytes": {
+                "description": "read_file only: truncate files larger than this (default 200000).",
                 "type": "integer",
                 "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
               }
-            }
+            },
+            "description": "Binding for read_file, write_file, list_files and search."
           },
           "readOnly": {
+            "description": "No side effects at all. Read-only tools may run in parallel and never ask for approval; test and build commands are not read-only.",
             "type": "boolean"
           },
           "destructive": {
+            "description": "Irreversible or externally visible (delete, cancel, send, deploy, overwrite). Destructive tools always require approval.",
             "type": "boolean"
           },
           "requiresApproval": {
+            "description": "Ask the human before every call (see guardrails.approvalMode).",
             "type": "boolean"
           },
           "source": {
+            "description": "Provenance, e.g. \"openapi:GET /orders\", \"package.json#scripts.test\" or \"builtin\".",
             "type": "string"
           }
         },
         "required": [
           "name",
           "kind"
-        ]
+        ],
+        "description": "A tool the agent can call."
       }
     },
     "subagents": {
       "default": [],
+      "description": "Optional delegates for reading-heavy work. Usually empty for small tool surfaces.",
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "kebab-case name; exposed to the main agent as the tool delegate_to_<name>."
           },
           "description": {
             "default": "",
+            "description": "Tells the main agent when to delegate to this subagent (and when to use its own tools instead) and what it returns.",
             "type": "string"
           },
           "systemPrompt": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Markdown system prompt for the subagent: its job, its tools, and the shape of its report."
           },
           "tools": {
             "default": [],
+            "description": "Names of tools from `tools` the subagent may use. Subagents cannot ask for approval, so give them no destructive tools.",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
           "model": {
+            "description": "Model id; defaults to model.subagentId.",
             "type": "string",
             "minLength": 1
           },
@@ -269,31 +312,37 @@
               "high",
               "xhigh",
               "max"
-            ]
+            ],
+            "description": "Reasoning effort (output_config.effort): higher is more thorough and more expensive. \"medium\" suits lookup/Q&A agents, \"high\" coding and multi-step work."
           }
         },
         "required": [
           "name",
           "systemPrompt"
-        ]
+        ],
+        "description": "A nested agent the main agent can delegate a focused task to. Add one only when it keeps a lot of reading out of the main context."
       }
     },
     "guardrails": {
+      "description": "Limits and safety rails enforced by the runtime.",
       "type": "object",
       "properties": {
         "maxTurns": {
           "default": 40,
+          "description": "Hard cap on agent-loop iterations per run.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
         "maxOutputTokensPerTurn": {
           "default": 32000,
+          "description": "max_tokens for each model request.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
         "maxCostUsd": {
+          "description": "Stop a run once its estimated cost passes this many US dollars.",
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -318,6 +367,7 @@
             "reboot",
             "npm publish"
           ],
+          "description": "Substrings that make a shell tool refuse to run, e.g. \"git push --force\".",
           "type": "array",
           "items": {
             "type": "string"
@@ -327,6 +377,7 @@
           "default": [
             "."
           ],
+          "description": "Directories (relative to the project root) file tools may touch.",
           "type": "array",
           "items": {
             "type": "string",
@@ -335,6 +386,7 @@
         },
         "redactEnv": {
           "default": [],
+          "description": "Env vars whose values are replaced with [REDACTED:NAME] in tool output before the model sees it.",
           "type": "array",
           "items": {
             "type": "string"
@@ -342,6 +394,7 @@
         },
         "approvalMode": {
           "default": "destructive",
+          "description": "Who needs a human yes: \"destructive\" asks for destructive or requiresApproval tools, \"always\" also for every non-read-only tool, \"never\" disables approval.",
           "type": "string",
           "enum": [
             "always",
@@ -358,74 +411,89 @@
         "contextEditing": false,
         "memory": false
       },
+      "description": "How the agent manages its context window.",
       "type": "object",
       "properties": {
         "caching": {
           "default": true,
+          "description": "Prompt caching on the system prompt, tools and conversation tail.",
           "type": "boolean"
         },
         "compaction": {
           "default": true,
+          "description": "Server-side compaction so long sessions can outgrow the context window.",
           "type": "boolean"
         },
         "contextEditing": {
           "default": false,
+          "description": "Clear old tool results automatically; useful when tools return bulky payloads.",
           "type": "boolean"
         },
         "memory": {
           "default": false,
+          "description": "Expose the memory tool for notes that persist across sessions.",
           "type": "boolean"
         }
       }
     },
     "evals": {
       "default": [],
+      "description": "Test cases for `decree-harness eval`: tool choice, restraint on gated tools, grounding, scope, and secrets.",
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "kebab-case identifier, unique within the spec."
           },
           "input": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "The user message, written the way a real user would phrase it, with concrete values."
           },
           "expect": {
             "default": {},
+            "description": "Checks applied to the agent's run.",
             "type": "object",
             "properties": {
               "toolsCalled": {
+                "description": "Tools that must be called at least once.",
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
               "toolsNotCalled": {
+                "description": "Tools that must not be called, e.g. a destructive tool the user has not confirmed.",
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
               "contains": {
+                "description": "Case-insensitive substrings the final answer must contain.",
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
               "notContains": {
+                "description": "Substrings the final answer must not contain.",
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
               "rubric": {
+                "description": "What a good answer does, graded by an LLM judge from the transcript.",
                 "type": "string"
               }
             }
           },
           "tags": {
+            "description": "Free-form labels such as tool-choice, safety, scope, secrets.",
             "type": "array",
             "items": {
               "type": "string"
@@ -435,7 +503,8 @@
         "required": [
           "id",
           "input"
-        ]
+        ],
+        "description": "A test case run by `decree-harness eval`. Write tools run in dry-run mode and approvals are declined."
       }
     },
     "targets": {
@@ -443,6 +512,7 @@
         "typescript",
         "claude-code"
       ],
+      "description": "Code targets `decree-harness generate` writes.",
       "type": "array",
       "items": {
         "type": "string",
@@ -451,45 +521,123 @@
           "python",
           "claude-code",
           "mcp"
-        ]
+        ],
+        "description": "Code target generated by `decree-harness generate`."
       }
     },
     "env": {
       "default": [],
+      "description": "Environment variables the harness reads (API base URL, credentials, ANTHROPIC_API_KEY).",
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Environment variable name, e.g. ACME_BASE_URL."
           },
           "description": {
             "default": "",
+            "description": "What the variable is for; shown in the generated .env.example.",
             "type": "string"
           },
           "required": {
             "default": false,
+            "description": "The harness refuses to start without it.",
             "type": "boolean"
           },
           "secret": {
             "default": false,
+            "description": "A credential: never logged, and its value is redacted from tool output via guardrails.redactEnv.",
             "type": "boolean"
           },
           "default": {
+            "description": "Value used when the variable is unset.",
             "type": "string"
           }
         },
         "required": [
           "name"
-        ]
+        ],
+        "description": "An environment variable the generated harness reads."
+      }
+    },
+    "decisions": {
+      "description": "Team decisions (ADRs, post-mortem lessons, repo rules). `decree-harness decisions extract` fills this from the repo; the get_decisions tool serves the live ones scoped to the paths an agent touches.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable lowercase slug, unique within the spec, e.g. \"adr-0003-use-postgres\" or \"rule-claude-md-never-write-raw-sql\"."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Short name of the decision."
+          },
+          "constraint": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The rule an agent must follow, in 1-3 sentences."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "proposed",
+              "superseded"
+            ],
+            "description": "live: agents follow it. proposed: extracted or drafted, waiting for a human to confirm (`decree-harness decisions confirm`). superseded: kept for history, never served."
+          },
+          "governs": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Globs relative to the repo root that this decision governs, e.g. [\"src/db/**\", \"migrations/**\"]. \"**\" covers the whole repo."
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Where the decision is written down, e.g. \"docs/adr/0003-use-postgres.md\" or \"CLAUDE.md:14\"."
+          },
+          "owner": {
+            "description": "Person or team that owns the decision.",
+            "type": "string"
+          },
+          "supersededBy": {
+            "description": "Id of the decision that replaced this one.",
+            "type": "string"
+          },
+          "rationale": {
+            "description": "Why the team decided this (the ADR context, the incident).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "constraint",
+          "status",
+          "governs",
+          "source"
+        ],
+        "description": "A decision the team made. The get_decisions tool serves live decisions whose globs match the paths an agent is about to touch."
       }
     },
     "provenance": {
+      "description": "Where this spec came from. Informational; safe to edit.",
       "type": "object",
       "properties": {
         "generator": {
           "default": "heuristic",
+          "description": "Which planner produced the spec.",
           "type": "string",
           "enum": [
             "heuristic",
@@ -498,15 +646,19 @@
         },
         "decreeVersion": {
           "default": "0.1.0",
+          "description": "decree-harness version that wrote the spec.",
           "type": "string"
         },
         "createdAt": {
+          "description": "ISO timestamp of the plan.",
           "type": "string"
         },
         "profileName": {
+          "description": "Name of the scanned project.",
           "type": "string"
         },
         "notes": {
+          "description": "Design rationale from the planner: key decisions and what was left out.",
           "type": "array",
           "items": {
             "type": "string"

@@ -12,6 +12,7 @@ const EXAMPLES: [string, string][] = [
   ["chat", "talk to the generated agent"],
   ['run "Which orders are pending?" --json', "one-shot run, JSON output"],
   ['refine "make every tool read-only"', "edit the harness in plain English"],
+  ["decisions for src/db", "decisions that apply to a path"],
   ["eval --filter orders", "run a subset of the evals"],
 ];
 
@@ -165,6 +166,44 @@ export function buildProgram(): Command {
     .option("--json", "print tools as JSON")
     .action((opts, cmd) => import("./tools.js").then((m) => m.toolsCommand(opts, cmd)));
 
+  const decisions = program
+    .command("decisions")
+    .description("the team decisions the agent follows: extract them, confirm them, check what applies to a path");
+  const mutating = (cmd: Command) =>
+    cmd
+      .option("-o, --out <dir>", "output directory to regenerate", DEFAULT_OUT_DIR)
+      .option("--no-generate", "only update decree.json")
+      .option("-f, --force", "overwrite generated files you edited");
+  decisions
+    .command("list", { isDefault: true })
+    .description("list the decisions in decree.json")
+    .option("--status <status>", "only live, proposed or superseded decisions")
+    .option("--json", "print decisions as JSON")
+    .action((opts, cmd) => import("./decisions.js").then((m) => m.decisionsListCommand(opts, cmd)));
+  mutating(
+    decisions
+      .command("extract")
+      .description("find decisions in ADRs, CLAUDE.md/AGENTS.md rules and post-mortems, and merge them into decree.json")
+      .option("--dry-run", "show what would be added without writing")
+      .option("--json", "print the result as JSON"),
+  ).action((opts, cmd) => import("./decisions.js").then((m) => m.decisionsExtractCommand(opts, cmd)));
+  decisions
+    .command("for <paths...>")
+    .description("show what get_decisions returns for these files or directories")
+    .option("--proposed", "include proposed decisions")
+    .option("--json", "print the matching decisions as JSON")
+    .action((paths, opts, cmd) => import("./decisions.js").then((m) => m.decisionsForCommand(paths, opts, cmd)));
+  mutating(decisions.command("confirm <ids...>").description("mark proposed decisions live, so the agent follows them")).action((ids, opts, cmd) =>
+    import("./decisions.js").then((m) => m.decisionsConfirmCommand(ids, opts, cmd)),
+  );
+  mutating(
+    decisions
+      .command("supersede <id>")
+      .alias("reject")
+      .description("retire a decision (with --by, name the decision that replaces it)")
+      .option("--by <id>", "the decision that replaces it"),
+  ).action((id, opts, cmd) => import("./decisions.js").then((m) => m.decisionsSupersedeCommand(id, opts, cmd)));
+
   program
     .command("schema")
     .description("print the JSON schema for decree.json")
@@ -184,6 +223,11 @@ export function buildProgram(): Command {
     sub.exitOverride();
     sub.showHelpAfterError(c.dim(`  hint: Run \`${selfCommand()} ${sub.name()} --help\` for usage.`));
     styleHelp(sub, color);
+    for (const leaf of sub.commands) {
+      leaf.exitOverride();
+      leaf.showHelpAfterError(c.dim(`  hint: Run \`${selfCommand()} ${sub.name()} ${leaf.name()} --help\` for usage.`));
+      styleHelp(leaf, color);
+    }
   }
   return program;
 }

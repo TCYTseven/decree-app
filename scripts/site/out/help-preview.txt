@@ -1,0 +1,10 @@
+Usage: decree-harness preview [options]
+
+open a local dashboard to inspect, edit and try the harness
+
+Options:
+  -p, --port <port>  port to listen on (a free one is picked if taken) (default: "4321")
+  --host <host>      interface to bind (keep 127.0.0.1 unless you know why) (default: "127.0.0.1")
+  --no-open          don't open the browser
+  --api-key <key>    Anthropic API key for the playground and evals
+  -h, --help         show help
