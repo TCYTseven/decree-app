@@ -171,9 +171,42 @@ kind of spec from the scan alone.
 | `tools` | List the tools in `decree.json` |
 | `decisions` | List, extract, confirm and supersede team decisions; `decisions for <path>` shows what the agent gets |
 | `schema` | Print the JSON schema for `decree.json` |
+| `preview` | Local dashboard to inspect, edit and try the harness |
+| `login` / `logout` / `whoami` | Connect this machine to [trydecree.com/dashboard](https://trydecree.com/dashboard) |
+| `push` | Sync `decree.json` to the dashboard (`-m "<note>"`, `--dry-run`, `--json`) |
 
 Useful flags: `--yes` (non-interactive), `--offline`, `--model <id>`,
 `--goal "<text>"`, `--no-critique`, `-C <dir>`.
+
+## Dashboard sync
+
+`decree.json` stays the source of truth in your repo; the dashboard at
+[trydecree.com/dashboard](https://trydecree.com/dashboard) keeps every version
+of it and the eval runs against each version.
+
+```bash
+npx decree-harness login        # approve the code in your browser
+npx decree-harness push         # a changed spec becomes a new version
+npx decree-harness eval --push  # attach the run to the version it tested
+```
+
+`login` creates a token on your machine and sends only its hash; you approve
+the login in the browser and the token is saved to
+`~/.config/decree/credentials.json` (mode 600). In CI, create a token under
+**API tokens** and set it as `DECREE_TOKEN`:
+
+```yaml
+- run: npx -y decree-harness push
+  env:
+    DECREE_TOKEN: ${{ secrets.DECREE_TOKEN }}
+```
+
+What is uploaded: the spec (without `$schema`, defaults of secret env vars, or
+credentials in base URLs), git commit/branch/remote (credentials stripped),
+and for evals the scores, check results, tool names and a shortened, masked
+final answer. Tool inputs and outputs never leave your machine.
+`DECREE_API_URL` points the CLI at another deployment (e.g.
+`http://localhost:3000`).
 
 ## Setup
 
