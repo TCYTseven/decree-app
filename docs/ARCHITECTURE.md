@@ -32,6 +32,26 @@ coordinating: every module depends on them.
 | `.decree/runs/` | JSONL transcripts of `run`/`chat`/`eval` sessions. |
 | `agent/` (default out dir) | Generated targets: `agent/typescript`, `agent/python`, `agent/mcp-server`, `agent/claude-code`, plus `agent/README.md`, `agent/harness.md`, `agent/evals.json`, `agent/.env.example` and the `agent/.decree-generated` marker (see list_files / search below). |
 
+Outside the project, `login` writes `~/.config/decree/credentials.json`
+(`$DECREE_CONFIG_DIR` overrides the directory).
+
+## Dashboard sync (`src/cloud/`)
+
+`login`, `push`, `whoami`, `logout` and `eval --push` talk to the dashboard's
+`/api/v1` routes (trydecree.com, or `$DECREE_API_URL`):
+
+| Route | Used by |
+|---|---|
+| `POST /api/v1/cli/login` `{ tokenHash, tokenPrefix, clientName }` | `login`: registers a locally made token by its sha256, returns a user code to approve in the browser |
+| `POST /api/v1/cli/login/poll` (bearer) | `login`: `pending` / `approved` / `denied` / `expired` |
+| `GET /api/v1/whoami` (bearer) | `whoami`, `login --token` |
+| `POST /api/v1/logout` (bearer) | `logout`: revokes the token |
+| `POST /api/v1/harnesses` (bearer) `{ spec, slug?, message?, git, source, cliVersion }` | `push`: a new version only when the spec changed |
+| `POST /api/v1/evals` (bearer) same + `evals: { summary, results, model, liveTools, filter?, durationMs }` | `eval --push` |
+
+`src/cloud/payload.ts` decides what leaves the machine (see README,
+"Dashboard sync"); tests use the fake server in `test/helpers/fake-decree.ts`.
+
 ## Models
 
 - Planner and generated harness default: `claude-opus-5` (adaptive thinking, effort `high`).

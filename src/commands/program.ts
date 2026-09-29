@@ -13,6 +13,7 @@ const EXAMPLES: [string, string][] = [
   ['run "Which orders are pending?" --json', "one-shot run, JSON output"],
   ['refine "make every tool read-only"', "edit the harness in plain English"],
   ["eval --filter orders", "run a subset of the evals"],
+  ["push", "sync decree.json to the web dashboard"],
 ];
 
 /** Examples block, laid out for the terminal width (description beside or above each command). */
@@ -149,6 +150,7 @@ export function buildProgram(): Command {
     .option("-m, --model <id>", "override the agent model")
     .option("--api-key <key>", "Anthropic API key")
     .option("--json", "print results as JSON")
+    .option("--push", "upload the results to the dashboard (needs `login` or DECREE_TOKEN)")
     .action((opts, cmd) => import("./eval.js").then((m) => m.evalCommand(opts, cmd)));
 
   program
@@ -178,6 +180,33 @@ export function buildProgram(): Command {
     .option("--no-open", "don't open the browser")
     .option("--api-key <key>", "Anthropic API key for the playground and evals")
     .action((opts, cmd) => import("./preview.js").then((m) => m.previewCommand(opts, cmd)));
+
+  program
+    .command("login")
+    .description("connect this machine to trydecree.com/dashboard")
+    .option("--token <token>", "save an existing API token instead of approving in the browser")
+    .option("--no-browser", "print the approval link instead of opening it")
+    .action((opts, cmd) => import("./login.js").then((m) => m.loginCommand(opts, cmd)));
+
+  program
+    .command("push")
+    .description("sync decree.json to the dashboard (a changed spec becomes a new version)")
+    .option("-m, --message <text>", "note shown next to this version")
+    .option("--name <slug>", "harness name on the dashboard (default: decree.json name)")
+    .option("--dry-run", "show what would be pushed without sending it")
+    .option("--json", "print the result as JSON")
+    .action((opts, cmd) => import("./push.js").then((m) => m.pushCommand(opts, cmd)));
+
+  program
+    .command("whoami")
+    .description("show the dashboard account this machine pushes to")
+    .option("--json", "print as JSON")
+    .action((opts, cmd) => import("./whoami.js").then((m) => m.whoamiCommand(opts, cmd)));
+
+  program
+    .command("logout")
+    .description("revoke this machine's dashboard token and forget it")
+    .action((opts, cmd) => import("./logout.js").then((m) => m.logoutCommand(opts, cmd)));
 
   program.showHelpAfterError(c.dim(`  hint: Run \`${selfCommand()} --help\` for usage.`));
   for (const sub of program.commands) {

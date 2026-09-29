@@ -40,7 +40,7 @@ const cli = (...args: string[]) => runCli(["node", "decree-harness", "--no-color
 describe("cli", () => {
   it("--help lists commands and examples", async () => {
     expect(await cli("--help")).toBe(0);
-    for (const cmd of ["init", "scan", "plan", "generate", "refine", "chat", "run", "eval", "doctor", "tools", "schema"]) {
+    for (const cmd of ["init", "scan", "plan", "generate", "refine", "chat", "run", "eval", "doctor", "tools", "schema", "login", "push", "whoami", "logout"]) {
       expect(stdout).toContain(cmd);
     }
     expect(stdout).toContain("Examples:");
