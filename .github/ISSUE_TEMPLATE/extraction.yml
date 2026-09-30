@@ -1,0 +1,37 @@
+name: Decision extraction
+description: decree missed a decision, invented one, or got its status or scope wrong
+labels: [extraction]
+body:
+  - type: textarea
+    id: source
+    attributes:
+      label: Source file
+      description: The ADR, CLAUDE.md, AGENTS.md, Cursor rule or post-mortem (or a trimmed copy). Remove anything private.
+      render: markdown
+    validations:
+      required: true
+  - type: input
+    id: path
+    attributes:
+      label: Path of that file in the repo
+      placeholder: docs/adr/0003-use-postgres.md
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What decree produced
+      description: The entry from decree.json, or the output of `npx decree-harness decisions extract --dry-run --json`.
+      render: json
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: Which decisions, with what status and governs globs.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: decree-harness version
+      placeholder: npx decree-harness --version

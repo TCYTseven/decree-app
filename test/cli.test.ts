@@ -40,7 +40,7 @@ const cli = (...args: string[]) => runCli(["node", "decree-harness", "--no-color
 describe("cli", () => {
   it("--help lists commands and examples", async () => {
     expect(await cli("--help")).toBe(0);
-    for (const cmd of ["init", "scan", "plan", "generate", "refine", "chat", "run", "eval", "doctor", "tools", "schema", "login", "push", "whoami", "logout"]) {
+    for (const cmd of ["init", "scan", "plan", "generate", "refine", "chat", "run", "eval", "doctor", "tools", "decisions", "schema", "mcp"]) {
       expect(stdout).toContain(cmd);
     }
     expect(stdout).toContain("Examples:");
@@ -49,6 +49,12 @@ describe("cli", () => {
   it("--version prints the version", async () => {
     expect(await cli("--version")).toBe(0);
     expect(stdout.trim()).toBe(DECREE_VERSION);
+  });
+
+  it("the version matches package.json and the site generator", async () => {
+    const pkg = JSON.parse(await fs.readFile("package.json", "utf8")) as { version: string };
+    expect(DECREE_VERSION).toBe(pkg.version);
+    expect(await fs.readFile("scripts/site/gen.py", "utf8")).toContain(`VERSION = "${pkg.version}"`);
   });
 
   it("schema prints the JSON schema", async () => {

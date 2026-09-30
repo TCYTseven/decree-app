@@ -93,7 +93,8 @@ async function save(root: string, spec: HarnessSpec, opts: MutateOptions): Promi
     await generateStep(root, next, { targets: next.targets, outDir, force: opts.force });
     return;
   }
-  log.raw(c.dim(`Run \`${selfCommand()} generate\` to update the generated agent.`));
+  if (generatedBefore) log.raw(c.dim(`Run \`${selfCommand()} generate\` to update the generated agent.`));
+  else log.raw(c.dim(`\`${selfCommand()} mcp\` serves the change on its next call.`));
 }
 
 // ---------------------------------------------------------------------------

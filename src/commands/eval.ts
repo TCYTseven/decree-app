@@ -11,12 +11,8 @@ import { log, setQuiet } from "../ui/logger.js";
 import { createSpinner } from "../ui/spinner.js";
 import { renderTable } from "../ui/table.js";
 import { c, sym, termWidth } from "../ui/theme.js";
-import { cloud, type PushResult } from "../cloud/api.js";
-import { gitInfo } from "../cloud/git.js";
-import { buildEvalPayload } from "../cloud/payload.js";
 import { rootFor, selfCommand } from "./context.js";
 import { findApiKey, llmCost, makeLLM } from "./pipeline.js";
-import { pushedLine, requireAuth } from "./push.js";
 
 export interface EvalCmdOptions {
   filter?: string;
@@ -25,7 +21,6 @@ export interface EvalCmdOptions {
   model?: string;
   apiKey?: string;
   json?: boolean;
-  push?: boolean;
 }
 
 export interface EvalSummary {
@@ -55,8 +50,6 @@ export async function evalCommand(opts: EvalCmdOptions, cmd: Command): Promise<v
   const { spec, warnings } = await loadSpec(root);
   const { key } = await findApiKey(root, opts.apiKey);
   if (!key) throw new MissingApiKeyError();
-  // Check the login before spending tokens on the run.
-  const auth = opts.push ? await requireAuth() : undefined;
   const cases = spec.evals.filter((e) => !opts.filter || e.id.includes(opts.filter));
   if (!cases.length) {
     throw new CliError(opts.filter ? `No eval ids match "${opts.filter}"` : "decree.json has no evals", {
@@ -73,7 +66,6 @@ export async function evalCommand(opts: EvalCmdOptions, cmd: Command): Promise<v
   }
   const judge = makeLLM(key, opts.model);
   const spin = createSpinner();
-  const startedAt = Date.now();
   let done = 0;
   spin.start(`Running ${plural(cases.length, "eval")}…`);
   let results: EvalResult[];
@@ -95,27 +87,10 @@ export async function evalCommand(opts: EvalCmdOptions, cmd: Command): Promise<v
     throw err;
   }
   const summary = summarizeResults(results, llmCost(judge));
-  const durationMs = Date.now() - startedAt;
   spin.stop(`Ran ${plural(results.length, "eval")}`);
 
-  let pushed: PushResult | undefined;
-  let pushError: unknown;
-  if (auth) {
-    const payload = buildEvalPayload(spec, results, summary, {
-      git: await gitInfo(root),
-      model: opts.model ?? spec.model.id,
-      liveTools: Boolean(opts.liveTools),
-      filter: opts.filter,
-      durationMs,
-    });
-    pushed = await cloud.pushEvals(auth.apiUrl, auth.token, payload).catch((err) => {
-      pushError = err;
-      return undefined;
-    });
-  }
-
   if (opts.json) {
-    process.stdout.write(`${JSON.stringify({ summary, results, ...(pushed ? { push: pushed } : {}) }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ summary, results }, null, 2)}\n`);
   } else {
     const rows = results.map((r) => [
       r.passed ? c.green(sym.ok) : c.red(sym.fail),
@@ -144,8 +119,6 @@ export async function evalCommand(opts: EvalCmdOptions, cmd: Command): Promise<v
       ? c.red(`${summary.passed}/${summary.total} passed`)
       : c.green(`${summary.passed}/${summary.total} passed`);
     p.outro(`${verdict} ${c.dim(`${sym.dot} score ${Math.round(summary.score * 100)}% ${sym.dot}`)} ${formatUsd(summary.costUsd)}`);
-    if (pushed) log.raw(pushedLine(pushed));
   }
-  if (pushError) throw pushError;
   if (summary.failed) throw new SilentExit(1);
 }

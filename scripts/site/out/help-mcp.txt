@@ -1,0 +1,6 @@
+Usage: decree-harness mcp [options]
+
+serve get_decisions from decree.json over stdio, for Claude Code, Cursor or any MCP client
+
+Options:
+  -h, --help  show help

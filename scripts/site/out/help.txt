@@ -24,6 +24,8 @@ Commands:
   decisions                       the team decisions the agent follows: extract them, confirm them,
                                   check what applies to a path
   schema                          print the JSON schema for decree.json
+  mcp                             serve get_decisions from decree.json over stdio, for Claude Code,
+                                  Cursor or any MCP client
   preview [options]               open a local dashboard to inspect, edit and try the harness
   help [command]                  display help for command
 
@@ -36,6 +38,7 @@ Examples:
   $ npx decree-harness refine "make every tool read-only"      edit the harness in plain English
   $ npx decree-harness decisions for src/db                    decisions that apply to a path
   $ npx decree-harness eval --filter orders                    run a subset of the evals
+  $ npx decree-harness mcp                                     serve decisions over MCP
 
 decree.json is the source of truth: edit it, then run `npx decree-harness generate`. Installed
 globally, the shorter `decree` command works too.
