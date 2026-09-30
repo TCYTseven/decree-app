@@ -12,10 +12,12 @@ All notable changes to decree-harness are listed here. The format follows
   for Claude Code, Cursor and other MCP clients, with nothing to generate
   first. It re-reads `decree.json` on every call.
 
-### Removed
+### Changed
 
-- `login`, `logout`, `whoami`, `push` and `eval --push`, which synced
-  `decree.json` to a hosted dashboard. decree now runs entirely locally.
+- `login`, `logout`, `whoami`, `push` and `eval --push` sync to a Decree
+  dashboard you host yourself. trydecree.com doesn't host dashboards yet, so
+  there is no default URL: pass `login --url <dashboard>` or set
+  `DECREE_API_URL`. Everything else runs locally with no account.
 
 ## 0.1.0
 

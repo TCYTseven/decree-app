@@ -4,6 +4,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EvalResult } from "../src/core/types.js";
 import { stripAnsi } from "../src/ui/theme.js";
+import { newToken } from "../src/cloud/api.js";
+import { seedToken, startFakeDecree } from "./helpers/fake-decree.js";
 import { sampleSpec } from "./helpers/sample-spec.js";
 
 const runEvals = vi.fn<(spec: unknown, opts: { onResult?: (r: EvalResult) => void; dryRunTools?: boolean }) => Promise<EvalResult[]>>();
@@ -76,4 +78,47 @@ describe("eval command", () => {
     expect(stderr).toContain('No eval ids match "zzz"');
   });
 
+  it("--push uploads the run with the spec it ran against", async () => {
+    const fake = await startFakeDecree();
+    const token = newToken();
+    seedToken(fake, token);
+    const saved = { url: process.env.DECREE_API_URL, token: process.env.DECREE_TOKEN };
+    process.env.DECREE_API_URL = fake.url;
+    process.env.DECREE_TOKEN = token;
+    try {
+      runEvals.mockResolvedValue(results);
+      const code = await runCli(["node", "decree-harness", "--no-color", "--cwd", root, "eval", "--push"]);
+      expect(code).toBe(1); // one eval failed; the upload still happened
+      const req = fake.requests.find((r) => r.path === "/api/v1/evals")!;
+      const body = req.body as { spec: { name: string }; evals: { summary: { passed: number; total: number }; results: { toolCalls: string[] }[]; model: string } };
+      expect(body.spec.name).toBe(sampleSpec().name);
+      expect(body.evals.summary).toMatchObject({ passed: 1, total: 2 });
+      expect(body.evals.results[1].toolCalls).toEqual(["cancel_order"]);
+      expect(body.evals.model).toBe(sampleSpec().model.id);
+      expect(stripAnsi(stdout)).toContain(`/dashboard/harnesses/${sampleSpec().name}`);
+    } finally {
+      process.env.DECREE_API_URL = saved.url;
+      if (saved.token === undefined) delete process.env.DECREE_TOKEN;
+      else process.env.DECREE_TOKEN = saved.token;
+      if (saved.url === undefined) delete process.env.DECREE_API_URL;
+      await fake.close();
+    }
+  });
+
+  it("--push without a login fails before running any evals", async () => {
+    const saved = { dir: process.env.DECREE_CONFIG_DIR, token: process.env.DECREE_TOKEN };
+    process.env.DECREE_CONFIG_DIR = root;
+    delete process.env.DECREE_TOKEN;
+    runEvals.mockClear();
+    try {
+      const code = await runCli(["node", "decree-harness", "--no-color", "--cwd", root, "eval", "--push"]);
+      expect(code).toBe(1);
+      expect(stderr).toContain("Not logged in");
+      expect(runEvals).not.toHaveBeenCalled();
+    } finally {
+      if (saved.dir === undefined) delete process.env.DECREE_CONFIG_DIR;
+      else process.env.DECREE_CONFIG_DIR = saved.dir;
+      if (saved.token !== undefined) process.env.DECREE_TOKEN = saved.token;
+    }
+  });
 });

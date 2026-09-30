@@ -1,0 +1,10 @@
+Usage: decree-harness push [options]
+
+sync decree.json to your dashboard (a changed spec becomes a new version)
+
+Options:
+  -m, --message <text>  note shown next to this version
+  --name <slug>         harness name on the dashboard (default: decree.json name)
+  --dry-run             show what would be pushed without sending it
+  --json                print the result as JSON
+  -h, --help            show help

@@ -224,9 +224,42 @@ kind of spec from the scan alone.
 | `mcp` | Serve `get_decisions` from `decree.json` over stdio for Claude Code, Cursor or any MCP client |
 | `schema` | Print the JSON schema for `decree.json` |
 | `preview` | Local dashboard to inspect, edit and try the harness |
+| `login` / `logout` / `whoami` | Connect this machine to your self-hosted dashboard (`login --url <dashboard>`) |
+| `push` | Sync `decree.json` to the dashboard (`-m "<note>"`, `--dry-run`, `--json`) |
 
 Useful flags: `--yes` (non-interactive), `--offline`, `--model <id>`,
 `--goal "<text>"`, `--no-critique`, `-C <dir>`.
+
+## Dashboard sync (self-hosted)
+
+Everything above runs locally with no account. If you want a dashboard that
+keeps every version of `decree.json` and the eval runs against each one, host
+the Decree dashboard yourself (a Next.js app on Supabase). trydecree.com
+doesn't host dashboards yet, so the CLI has no default server.
+
+```bash
+npx decree-harness login --url https://decree.example.com  # approve the code in your browser
+npx decree-harness push                                    # a changed spec becomes a new version
+npx decree-harness eval --push                             # attach the run to the version it tested
+```
+
+`login` creates a token on your machine and sends only its hash; you approve
+the login in the browser and the token and dashboard URL are saved to
+`~/.config/decree/credentials.json` (mode 600). In CI, create a token under
+**API tokens** on your dashboard and set both variables:
+
+```yaml
+- run: npx -y decree-harness push
+  env:
+    DECREE_API_URL: https://decree.example.com
+    DECREE_TOKEN: ${{ secrets.DECREE_TOKEN }}
+```
+
+What is uploaded: the spec (without `$schema`, defaults of secret env vars, or
+credentials in base URLs), git commit/branch/remote (credentials stripped),
+and for evals the scores, check results, tool names and a shortened, masked
+final answer. Tool inputs and outputs never leave your machine.
+`DECREE_API_URL` overrides the saved URL (e.g. `http://localhost:3000`).
 
 ## Setup
 

@@ -1,0 +1,9 @@
+Usage: decree-harness login [options]
+
+connect this machine to your self-hosted Decree dashboard
+
+Options:
+  --url <url>      dashboard address, e.g. https://decree.example.com (or set DECREE_API_URL)
+  --token <token>  save an existing API token instead of approving in the browser
+  --no-browser     print the approval link instead of opening it
+  -h, --help       show help

@@ -9,4 +9,5 @@ Options:
   -m, --model <id>   override the agent model
   --api-key <key>    Anthropic API key
   --json             print results as JSON
+  --push             upload the results to your dashboard (needs `login` or DECREE_TOKEN)
   -h, --help         show help
