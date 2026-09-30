@@ -27,6 +27,11 @@ Commands:
   mcp                             serve get_decisions from decree.json over stdio, for Claude Code,
                                   Cursor or any MCP client
   preview [options]               open a local dashboard to inspect, edit and try the harness
+  login [options]                 connect this machine to your self-hosted Decree dashboard
+  push [options]                  sync decree.json to your dashboard (a changed spec becomes a new
+                                  version)
+  whoami [options]                show the dashboard account this machine pushes to
+  logout                          revoke this machine's dashboard token and forget it
   help [command]                  display help for command
 
 Examples:

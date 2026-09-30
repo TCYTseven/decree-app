@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Commands · decree docs</title>
-<meta name="description" content="decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, mcp, schema.">
+<meta name="description" content="decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, mcp, login, push, schema.">
 <meta property="og:title" content="Commands · decree docs">
-<meta property="og:description" content="decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, mcp, schema.">
+<meta property="og:description" content="decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, mcp, login, push, schema.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#faf9f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f0f0d" media="(prefers-color-scheme: dark)">
@@ -73,6 +73,11 @@ Commands:
   mcp                             serve get_decisions from decree.json over stdio, for Claude Code,
                                   Cursor or any MCP client
   preview [options]               open a local dashboard to inspect, edit and try the harness
+  login [options]                 connect this machine to your self-hosted Decree dashboard
+  push [options]                  sync decree.json to your dashboard (a changed spec becomes a new
+                                  version)
+  whoami [options]                show the dashboard account this machine pushes to
+  logout                          revoke this machine's dashboard token and forget it
   help [command]                  display help for command
 
 Examples:
@@ -206,6 +211,7 @@ Options:
   -m, --model &lt;id&gt;   override the agent model
   --api-key &lt;key&gt;    Anthropic API key
   --json             print results as JSON
+  --push             upload the results to your dashboard (needs `login` or DECREE_TOKEN)
   -h, --help         show help</code></pre></div>
 <div class="code"><div class="code-head"><span>Terminal</span><button type="button" class="copy-btn" aria-label="Copy commands"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div><pre><code><span class="c-prompt">$ </span>npx decree-harness eval <span class="c-flag">--filter</span> orders</code></pre></div>
 <h2 id="doctor"><a class="anchor" href="#doctor"><code>doctor</code></a></h2>
@@ -261,6 +267,33 @@ Options:
   -h, --help  show help</code></pre></div>
 <div class="code"><div class="code-head"><span>Terminal</span><button type="button" class="copy-btn" aria-label="Copy commands"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div><pre><code><span class="c-prompt">$ </span>claude mcp add decree -- npx <span class="c-flag">-y</span> decree-harness mcp
 <span class="c-prompt">$ </span>npx decree-harness mcp <span class="c-flag">-C</span> path/to/repo</code></pre></div>
+<h2 id="login"><a class="anchor" href="#login"><code>login</code></a></h2>
+<p>Connects this machine to a Decree dashboard you host yourself; trydecree.com doesn't host dashboards yet. The CLI makes a token, sends only its hash, and waits while you approve the code in the browser. The token and URL go to <code>~/.config/decree/credentials.json</code>. <code>logout</code> revokes it and <code>whoami</code> shows the account.</p>
+<div class="code"><div class="code-head"><span>decree-harness login --help</span></div><pre><code>Usage: decree-harness login [options]
+
+connect this machine to your self-hosted Decree dashboard
+
+Options:
+  --url &lt;url&gt;      dashboard address, e.g. https://decree.example.com (or set DECREE_API_URL)
+  --token &lt;token&gt;  save an existing API token instead of approving in the browser
+  --no-browser     print the approval link instead of opening it
+  -h, --help       show help</code></pre></div>
+<div class="code"><div class="code-head"><span>Terminal</span><button type="button" class="copy-btn" aria-label="Copy commands"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div><pre><code><span class="c-prompt">$ </span>npx decree-harness login <span class="c-flag">--url</span> https://decree.example.com
+<span class="c-prompt">$ </span>npx decree-harness whoami</code></pre></div>
+<h2 id="push"><a class="anchor" href="#push"><code>push</code></a></h2>
+<p>Syncs <code>decree.json</code> to your dashboard; a changed spec becomes a new version. <code>eval --push</code> attaches an eval run to the version it tested. In CI, set <code>DECREE_API_URL</code> and <code>DECREE_TOKEN</code>. Tool inputs and outputs never leave your machine.</p>
+<div class="code"><div class="code-head"><span>decree-harness push --help</span></div><pre><code>Usage: decree-harness push [options]
+
+sync decree.json to your dashboard (a changed spec becomes a new version)
+
+Options:
+  -m, --message &lt;text&gt;  note shown next to this version
+  --name &lt;slug&gt;         harness name on the dashboard (default: decree.json name)
+  --dry-run             show what would be pushed without sending it
+  --json                print the result as JSON
+  -h, --help            show help</code></pre></div>
+<div class="code"><div class="code-head"><span>Terminal</span><button type="button" class="copy-btn" aria-label="Copy commands"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div><pre><code><span class="c-prompt">$ </span>npx decree-harness push <span class="c-flag">-m</span> "Confirm refund rule"
+<span class="c-prompt">$ </span>npx decree-harness eval <span class="c-flag">--push</span></code></pre></div>
 <h2 id="schema"><a class="anchor" href="#schema"><code>schema</code></a></h2>
 <p>Prints the JSON schema for <code>decree.json</code>. decree also writes it to <code>.decree/schema.json</code> for editors.</p>
 <div class="code"><div class="code-head"><span>decree-harness schema --help</span></div><pre><code>Usage: decree-harness schema [options]
@@ -274,7 +307,7 @@ Options:
     </article>
     <nav class="pager" aria-label="Previous and next page"><a class="prev" href="index.html"><span>Previous</span><strong>Quickstart</strong></a><a class="next" href="config.html"><span>Next</span><strong>decree.json</strong></a></nav>
   </main>
-  <aside class="docs-toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#global-options">Global options</a></li><li><a href="#init"><code>init</code></a></li><li><a href="#scan"><code>scan</code></a></li><li><a href="#plan"><code>plan</code></a></li><li><a href="#generate"><code>generate</code></a></li><li><a href="#refine"><code>refine</code></a></li><li><a href="#chat"><code>chat</code></a></li><li><a href="#run"><code>run</code></a></li><li><a href="#eval"><code>eval</code></a></li><li><a href="#doctor"><code>doctor</code></a></li><li><a href="#tools"><code>tools</code></a></li><li><a href="#decisions"><code>decisions</code></a></li><li><a href="#mcp"><code>mcp</code></a></li><li><a href="#schema"><code>schema</code></a></li></ul></aside>
+  <aside class="docs-toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#global-options">Global options</a></li><li><a href="#init"><code>init</code></a></li><li><a href="#scan"><code>scan</code></a></li><li><a href="#plan"><code>plan</code></a></li><li><a href="#generate"><code>generate</code></a></li><li><a href="#refine"><code>refine</code></a></li><li><a href="#chat"><code>chat</code></a></li><li><a href="#run"><code>run</code></a></li><li><a href="#eval"><code>eval</code></a></li><li><a href="#doctor"><code>doctor</code></a></li><li><a href="#tools"><code>tools</code></a></li><li><a href="#decisions"><code>decisions</code></a></li><li><a href="#mcp"><code>mcp</code></a></li><li><a href="#login"><code>login</code></a></li><li><a href="#push"><code>push</code></a></li><li><a href="#schema"><code>schema</code></a></li></ul></aside>
 </div>
 <footer class="site-footer">
   <div class="container footer-inner">
