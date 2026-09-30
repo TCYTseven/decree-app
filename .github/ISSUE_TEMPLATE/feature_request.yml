@@ -1,0 +1,20 @@
+name: Feature request
+description: A new decision source, scanner, target or command
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The situation, and where decree falls short today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like decree to do
+  - type: textarea
+    id: example
+    attributes:
+      label: Example input
+      description: For a new decision source or scanner, a sample file helps most.

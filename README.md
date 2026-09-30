@@ -1,87 +1,59 @@
-# decree-harness
+# decree
 
-Generate an agent harness for your codebase in one command.
+[![CI](https://github.com/TCYTseven/decree-app/actions/workflows/ci.yml/badge.svg)](https://github.com/TCYTseven/decree-app/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Give coding agents your team's decisions, scoped to the files they touch.
+
+Your repo already records decisions in ADRs, post-mortems, `CLAUDE.md`,
+`AGENTS.md` and Cursor rules. Agents either never see them or get all of them
+in every session. decree extracts them into `decree.json`, gives each one a
+status (`live`, `proposed`, `superseded`) and a scope (`governs` globs), and
+serves an agent only the live decisions that govern the paths it is about to
+change.
+
+It also generates a full agent harness for a codebase (system prompt, tools
+bound to your real endpoints and scripts, guardrails, evals) for TypeScript,
+Python, MCP and Claude Code. See [Generate an agent harness](#generate-an-agent-harness).
+
+## Quick start: decisions in Claude Code
+
+No API key needed. In your repo:
 
 ```bash
-npx decree-harness
+npx decree-harness plan --yes --offline      # scan the repo and extract decisions into decree.json
+npx decree-harness decisions                 # review them
+npx decree-harness decisions confirm <id>    # proposed -> live, once a person agrees it holds
+npx decree-harness decisions for src/db/users.ts   # exactly what an agent gets for that path
+
+claude mcp add decree -- npx -y decree-harness mcp
 ```
 
-decree scans your repo (API routes, OpenAPI specs, scripts, env vars, database
-models, docs), has Claude design a harness for the goal you describe, and writes
-runnable code: a system prompt, a tool surface bound to your real endpoints and
-scripts, subagents, guardrails, and evals. You can chat with the agent right
-away from the terminal, then ship the generated code.
+Claude Code now has a `get_decisions` tool. Before an edit it passes the paths
+it will touch and gets back at most 8 live decisions whose globs match, most
+specific first. The server re-reads `decree.json` on every call, so `confirm`
+and `supersede` take effect without a restart. Commit `decree.json` and review
+changes to it in pull requests like any other file.
 
-It also collects the decisions your team already made (ADRs, post-mortem lessons,
-rules in CLAUDE.md and AGENTS.md) and gives the agent only the ones that govern
-the files it is about to change.
+### Other MCP clients
 
-`decree.json` is the source of truth, the way `docs.json` is for Mintlify: edit
-it, regenerate, and keep it in the repo. The generated code is disposable. The
-decision record in `decree.json` is the part that lives on.
+Any client that runs stdio servers works. For Cursor, in `.cursor/mcp.json`:
 
-## What you get
-
-`npx decree-harness init --yes --offline --targets all` on
-[`test/fixtures/express-openapi`](test/fixtures/express-openapi) (an Express +
-OpenAPI orders service) writes:
-
-```
-decree.json                 the harness spec (edit it, then `decree-harness generate`)
-.decree/                    profile.json (last scan), manifest.json (hashes of generated files), schema.json
-agent/
-  README.md                 overview of the generated harness and how to run each target
-  harness.md                design doc: prompt, every tool, safety flags, planner notes
-  evals.json                eval cases
-  .env.example              env vars the tools need
-  .decree-generated         marker: decree's file tools and scanner skip this directory
-  typescript/               standalone agent (Anthropic TS SDK): src/{agent,cli,loop,tools,...}.ts, CLI, REPL, evals
-  python/                   standalone agent (Anthropic Python SDK): acme_orders_agent/, pyproject.toml, pytest tests/
-  mcp-server/               MCP server (src/server.ts, src/tools.ts) for Claude Code, Claude Desktop, Cursor
-  claude-code/              CLAUDE.md, .claude/{agents,commands,skills,settings.json}, .mcp.json
+```json
+{
+  "mcpServers": {
+    "decree": { "command": "npx", "args": ["-y", "decree-harness", "mcp"] }
+  }
+}
 ```
 
-When the repo has decisions, each target also gets `get_decisions` and a
-`decisions.json` (see [Decisions](#decisions)).
+The server reads `decree.json` from its working directory. If your client
+starts servers somewhere else, pass the repo: `"args": ["-y", "decree-harness", "mcp", "-C", "/path/to/repo"]`.
 
-Pick targets with `--targets typescript,python,mcp,claude-code` (or `all`).
+## How decisions work
 
-## Example
-
-`decree-harness tools --no-color` for that fixture (offline plan, 100 columns;
-narrower terminals drop the Kind column, wider ones add Source):
-
-```
-Acme Orders Agent · 18 tools · asks before 5 risky tools
-┌─────────────────────┬────────────┬─────────────────────────────┐
-│ Tool                │ Kind       │ Binds to                    │
-├─────────────────────┼────────────┼─────────────────────────────┤
-│ ● check_health      │ http       │ GET /health                 │
-│ ● list_orders       │ http       │ GET /orders                 │
-│ ◆ create_order      │ http       │ POST /orders                │
-│ ● get_order         │ http       │ GET /orders/{id}            │
-│ ■ delete_order      │ http       │ DELETE /orders/{id}         │
-│ ■ cancel_order      │ http       │ POST /orders/{id}/cancel    │
-│ ● list_customers    │ http       │ GET /customers              │
-│ ● get_customer      │ http       │ GET /customers/{customerId} │
-│ ● list_order_events │ http       │ GET /orders/{id}/events     │
-│ ◆ run_tests         │ shell      │ npm run test -- {{filter}}  │
-│ ◆ run_lint          │ shell      │ npm run lint                │
-│ ◆ run_build         │ shell      │ npm run build               │
-│ ■ run_deploy        │ shell      │ npm run deploy              │
-│ ■ run_db_migrate    │ shell      │ npm run db:migrate          │
-│ ■ run_db_seed       │ shell      │ npm run db:seed             │
-│ ● read_file         │ read_file  │ .                           │
-│ ● list_files        │ list_files │ .                           │
-│ ● search_code       │ search     │ .                           │
-└─────────────────────┴────────────┴─────────────────────────────┘
- ● read-only   ◆ writes   ■ destructive, asks first
-```
-
-## Decisions
-
-`init` reads the decisions your repo already writes down and stores them in
-`decree.json` under `decisions`:
+`plan` and `init` read the decisions your repo already writes down and store
+them in `decree.json` under `decisions` (`decisions extract` re-reads them later):
 
 - **ADRs** in `docs/adr`, `docs/adrs`, `docs/decisions`, `doc/adr`, `adr/`,
   `architecture/decisions`, `decisions/`, and any `adr/` directory. The title
@@ -119,7 +91,8 @@ decree-harness decisions supersede <id> --by <new-id>   # retire one (without --
 Commands that change decisions regenerate the harness when it was generated
 before (`--no-generate` to skip).
 
-When a spec has decisions, the harness gets a read-only `get_decisions` tool
+`decree-harness mcp` serves them directly from `decree.json`. When you also
+generate a harness, it gets a read-only `get_decisions` tool
 and one line in its system prompt: call it with the files you are about to
 change, follow what it returns, cite the decision id, and stop if a request
 conflicts with a live decision. The tool returns at most 8 live decisions whose
@@ -131,12 +104,90 @@ calls the MCP tool (or, without the MCP target, a small
 `CLAUDE.md` says how to look decisions up and lists none of them.
 
 Why scope them: a flat context file loads every rule into every session,
-whether or not it applies to the task. A 2026 ETH Zurich study found that flat
-`AGENTS.md` files lowered agent task success and raised cost by more than 20%.
-Serving only the decisions that govern the touched paths keeps the context
-small and relevant.
+whether or not it applies to the task. A February 2026 ETH Zurich study
+([Gloaguen et al., arXiv 2602.11988](https://arxiv.org/abs/2602.11988)) found
+that repository context files did not generally improve task success on real
+coding tasks and raised inference cost by over 20% on average. Serving only
+the decisions that govern the touched paths keeps the context small and
+relevant.
 
-## How it plans
+
+## Generate an agent harness
+
+```bash
+npx decree-harness
+```
+
+decree scans your repo (API routes, OpenAPI specs, scripts, env vars, database
+models, docs), has Claude design a harness for the goal you describe, and writes
+runnable code: a system prompt, a tool surface bound to your real endpoints and
+scripts, subagents, guardrails, and evals. You can chat with the agent right
+away from the terminal, then ship the generated code. When the repo has
+decisions, every target gets `get_decisions` too.
+
+`decree.json` is the source of truth, the way `docs.json` is for Mintlify: edit
+it, regenerate, and keep it in the repo. The generated code is disposable. The
+decision record in `decree.json` is the part that lives on.
+
+### What you get
+
+`npx decree-harness init --yes --offline --targets all` on
+[`test/fixtures/express-openapi`](test/fixtures/express-openapi) (an Express +
+OpenAPI orders service) writes:
+
+```
+decree.json                 the harness spec (edit it, then `decree-harness generate`)
+.decree/                    profile.json (last scan), manifest.json (hashes of generated files), schema.json
+agent/
+  README.md                 overview of the generated harness and how to run each target
+  harness.md                design doc: prompt, every tool, safety flags, planner notes
+  evals.json                eval cases
+  .env.example              env vars the tools need
+  .decree-generated         marker: decree's file tools and scanner skip this directory
+  typescript/               standalone agent (Anthropic TS SDK): src/{agent,cli,loop,tools,...}.ts, CLI, REPL, evals
+  python/                   standalone agent (Anthropic Python SDK): acme_orders_agent/, pyproject.toml, pytest tests/
+  mcp-server/               MCP server (src/server.ts, src/tools.ts) for Claude Code, Claude Desktop, Cursor
+  claude-code/              CLAUDE.md, .claude/{agents,commands,skills,settings.json}, .mcp.json
+```
+
+When the repo has decisions, each target also gets `get_decisions` and a
+`decisions.json` (see [Decisions](#decisions)).
+
+Pick targets with `--targets typescript,python,mcp,claude-code` (or `all`).
+
+### Example
+
+`decree-harness tools --no-color` for that fixture (offline plan, 100 columns;
+narrower terminals drop the Kind column, wider ones add Source):
+
+```
+Acme Orders Agent · 18 tools · asks before 5 risky tools
+┌─────────────────────┬────────────┬─────────────────────────────┐
+│ Tool                │ Kind       │ Binds to                    │
+├─────────────────────┼────────────┼─────────────────────────────┤
+│ ● check_health      │ http       │ GET /health                 │
+│ ● list_orders       │ http       │ GET /orders                 │
+│ ◆ create_order      │ http       │ POST /orders                │
+│ ● get_order         │ http       │ GET /orders/{id}            │
+│ ■ delete_order      │ http       │ DELETE /orders/{id}         │
+│ ■ cancel_order      │ http       │ POST /orders/{id}/cancel    │
+│ ● list_customers    │ http       │ GET /customers              │
+│ ● get_customer      │ http       │ GET /customers/{customerId} │
+│ ● list_order_events │ http       │ GET /orders/{id}/events     │
+│ ◆ run_tests         │ shell      │ npm run test -- {{filter}}  │
+│ ◆ run_lint          │ shell      │ npm run lint                │
+│ ◆ run_build         │ shell      │ npm run build               │
+│ ■ run_deploy        │ shell      │ npm run deploy              │
+│ ■ run_db_migrate    │ shell      │ npm run db:migrate          │
+│ ■ run_db_seed       │ shell      │ npm run db:seed             │
+│ ● read_file         │ read_file  │ .                           │
+│ ● list_files        │ list_files │ .                           │
+│ ● search_code       │ search     │ .                           │
+└─────────────────────┴────────────┴─────────────────────────────┘
+ ● read-only   ◆ writes   ■ destructive, asks first
+```
+
+### How it plans
 
 1. **Scan** (local, no network). Languages, frameworks, package manager, scripts
    (package.json, Makefile, pyproject, justfile, Taskfile), OpenAPI/Swagger specs,
@@ -170,47 +221,18 @@ kind of spec from the scan alone.
 | `doctor` | Check Node, API key, `decree.json`, required env vars, generated output |
 | `tools` | List the tools in `decree.json` |
 | `decisions` | List, extract, confirm and supersede team decisions; `decisions for <path>` shows what the agent gets |
+| `mcp` | Serve `get_decisions` from `decree.json` over stdio for Claude Code, Cursor or any MCP client |
 | `schema` | Print the JSON schema for `decree.json` |
 | `preview` | Local dashboard to inspect, edit and try the harness |
-| `login` / `logout` / `whoami` | Connect this machine to [trydecree.com/dashboard](https://trydecree.com/dashboard) |
-| `push` | Sync `decree.json` to the dashboard (`-m "<note>"`, `--dry-run`, `--json`) |
 
 Useful flags: `--yes` (non-interactive), `--offline`, `--model <id>`,
 `--goal "<text>"`, `--no-critique`, `-C <dir>`.
 
-## Dashboard sync
-
-`decree.json` stays the source of truth in your repo; the dashboard at
-[trydecree.com/dashboard](https://trydecree.com/dashboard) keeps every version
-of it and the eval runs against each version.
-
-```bash
-npx decree-harness login        # approve the code in your browser
-npx decree-harness push         # a changed spec becomes a new version
-npx decree-harness eval --push  # attach the run to the version it tested
-```
-
-`login` creates a token on your machine and sends only its hash; you approve
-the login in the browser and the token is saved to
-`~/.config/decree/credentials.json` (mode 600). In CI, create a token under
-**API tokens** and set it as `DECREE_TOKEN`:
-
-```yaml
-- run: npx -y decree-harness push
-  env:
-    DECREE_TOKEN: ${{ secrets.DECREE_TOKEN }}
-```
-
-What is uploaded: the spec (without `$schema`, defaults of secret env vars, or
-credentials in base URLs), git commit/branch/remote (credentials stripped),
-and for evals the scores, check results, tool names and a shortened, masked
-final answer. Tool inputs and outputs never leave your machine.
-`DECREE_API_URL` points the CLI at another deployment (e.g.
-`http://localhost:3000`).
-
 ## Setup
 
-Node 20.12 or newer.
+Node 20.12 or newer. Decisions, `mcp`, `scan`, `generate` and every
+`--offline` command run locally with no API key. Planning with Claude, `refine`,
+`chat`, `run` and `eval` need one:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...     # or put it in .env
@@ -243,7 +265,14 @@ const spec = await planHarness(profile, { goal: "Triage failing tests", targets:
 const files = generateTargets(spec, spec.targets, { outDir: "agent", decreeVersion: "0.1.0" });
 ```
 
-## Development
+## Contributing
+
+Bug reports, fixes and new scanners are welcome. Decision extraction that got a
+repo wrong is the most useful report you can file: open an issue with the
+source file (or a trimmed copy) and what you expected. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and conventions, and
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module layout and the
+tool semantics every target implements.
 
 ```bash
 npm install
@@ -254,9 +283,8 @@ node dist/cli.js --help
 npm run smoke     # pack the tarball, install it (local, global, npx) and run init on a fixture
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module layout and the
-tool semantics every target implements.
+Security issues: see [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)

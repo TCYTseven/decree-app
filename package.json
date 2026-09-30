@@ -1,17 +1,22 @@
 {
   "name": "decree-harness",
   "version": "0.1.0",
-  "description": "Generate an optimal AI agent harness for your codebase. Scan, plan, generate, run, eval.",
+  "description": "Give coding agents your team's decisions (ADRs, CLAUDE.md/AGENTS.md rules, post-mortems), scoped to the files they touch, over MCP. Also generates full agent harnesses for a codebase.",
   "keywords": [
     "agent",
     "harness",
     "claude",
-    "anthropic",
-    "llm",
-    "cli",
-    "generator",
+    "claude-code",
     "mcp",
-    "claude-code"
+    "mcp-server",
+    "adr",
+    "architecture-decision-records",
+    "agents-md",
+    "cursor-rules",
+    "coding-agents",
+    "context",
+    "llm",
+    "cli"
   ],
   "homepage": "https://github.com/TCYTseven/decree-app#readme",
   "bugs": {
@@ -22,7 +27,7 @@
     "url": "git+https://github.com/TCYTseven/decree-app.git"
   },
   "license": "MIT",
-  "author": "",
+  "author": "TCYTseven (https://github.com/TCYTseven)",
   "type": "module",
   "bin": {
     "decree-harness": "dist/cli.js",
