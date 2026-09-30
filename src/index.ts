@@ -21,6 +21,7 @@ export {
   type ScopeOptions,
 } from "./decisions/index.js";
 export { runEvals, type EvalOptions } from "./eval/index.js";
+export { serveMcp, handleRequest as handleMcpRequest, type McpServerOptions } from "./mcp/server.js";
 export { validateSpec, specJsonSchema } from "./core/spec.js";
 export { createLLM, resolveApiKey, MissingApiKeyError } from "./llm/client.js";
 export { estimateCostUsd } from "./llm/pricing.js";

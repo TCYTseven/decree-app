@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Commands · decree docs</title>
-<meta name="description" content="decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, schema.">
+<meta name="description" content="decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, mcp, schema.">
 <meta property="og:title" content="Commands · decree docs">
-<meta property="og:description" content="decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, schema.">
+<meta property="og:description" content="decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, mcp, schema.">
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#faf9f6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f0f0d" media="(prefers-color-scheme: dark)">
@@ -70,6 +70,8 @@ Commands:
   decisions                       the team decisions the agent follows: extract them, confirm them,
                                   check what applies to a path
   schema                          print the JSON schema for decree.json
+  mcp                             serve get_decisions from decree.json over stdio, for Claude Code,
+                                  Cursor or any MCP client
   preview [options]               open a local dashboard to inspect, edit and try the harness
   help [command]                  display help for command
 
@@ -82,6 +84,7 @@ Examples:
   $ npx decree-harness refine "make every tool read-only"      edit the harness in plain English
   $ npx decree-harness decisions for src/db                    decisions that apply to a path
   $ npx decree-harness eval --filter orders                    run a subset of the evals
+  $ npx decree-harness mcp                                     serve decisions over MCP
 
 decree.json is the source of truth: edit it, then run `npx decree-harness generate`. Installed
 globally, the shorter `decree` command works too.</code></pre></div>
@@ -248,6 +251,16 @@ Commands:
 <span class="c-prompt">$ </span>npx decree-harness decisions for src/db/users.ts
 <span class="c-prompt">$ </span>npx decree-harness decisions confirm rule-claude-md-never-write-raw-sql-outside-src
 <span class="c-prompt">$ </span>npx decree-harness decisions supersede adr-0002-use-mongodb <span class="c-flag">--by</span> adr-0003-store-events-in-postgres</code></pre></div>
+<h2 id="mcp"><a class="anchor" href="#mcp"><code>mcp</code></a></h2>
+<p>Serves <code>get_decisions</code> over stdio from <code>decree.json</code> in the project root, for Claude Code, Cursor or any MCP client. Nothing to generate or build first. It re-reads <code>decree.json</code> on every call, so <code>decisions confirm</code> and <code>supersede</code> apply without a restart.</p>
+<div class="code"><div class="code-head"><span>decree-harness mcp --help</span></div><pre><code>Usage: decree-harness mcp [options]
+
+serve get_decisions from decree.json over stdio, for Claude Code, Cursor or any MCP client
+
+Options:
+  -h, --help  show help</code></pre></div>
+<div class="code"><div class="code-head"><span>Terminal</span><button type="button" class="copy-btn" aria-label="Copy commands"><svg class="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><svg class="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span class="copy-label">Copy</span></button></div><pre><code><span class="c-prompt">$ </span>claude mcp add decree -- npx <span class="c-flag">-y</span> decree-harness mcp
+<span class="c-prompt">$ </span>npx decree-harness mcp <span class="c-flag">-C</span> path/to/repo</code></pre></div>
 <h2 id="schema"><a class="anchor" href="#schema"><code>schema</code></a></h2>
 <p>Prints the JSON schema for <code>decree.json</code>. decree also writes it to <code>.decree/schema.json</code> for editors.</p>
 <div class="code"><div class="code-head"><span>decree-harness schema --help</span></div><pre><code>Usage: decree-harness schema [options]
@@ -261,7 +274,7 @@ Options:
     </article>
     <nav class="pager" aria-label="Previous and next page"><a class="prev" href="index.html"><span>Previous</span><strong>Quickstart</strong></a><a class="next" href="config.html"><span>Next</span><strong>decree.json</strong></a></nav>
   </main>
-  <aside class="docs-toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#global-options">Global options</a></li><li><a href="#init"><code>init</code></a></li><li><a href="#scan"><code>scan</code></a></li><li><a href="#plan"><code>plan</code></a></li><li><a href="#generate"><code>generate</code></a></li><li><a href="#refine"><code>refine</code></a></li><li><a href="#chat"><code>chat</code></a></li><li><a href="#run"><code>run</code></a></li><li><a href="#eval"><code>eval</code></a></li><li><a href="#doctor"><code>doctor</code></a></li><li><a href="#tools"><code>tools</code></a></li><li><a href="#decisions"><code>decisions</code></a></li><li><a href="#schema"><code>schema</code></a></li></ul></aside>
+  <aside class="docs-toc" aria-label="On this page"><h2>On this page</h2><ul><li><a href="#global-options">Global options</a></li><li><a href="#init"><code>init</code></a></li><li><a href="#scan"><code>scan</code></a></li><li><a href="#plan"><code>plan</code></a></li><li><a href="#generate"><code>generate</code></a></li><li><a href="#refine"><code>refine</code></a></li><li><a href="#chat"><code>chat</code></a></li><li><a href="#run"><code>run</code></a></li><li><a href="#eval"><code>eval</code></a></li><li><a href="#doctor"><code>doctor</code></a></li><li><a href="#tools"><code>tools</code></a></li><li><a href="#decisions"><code>decisions</code></a></li><li><a href="#mcp"><code>mcp</code></a></li><li><a href="#schema"><code>schema</code></a></li></ul></aside>
 </div>
 <footer class="site-footer">
   <div class="container footer-inner">

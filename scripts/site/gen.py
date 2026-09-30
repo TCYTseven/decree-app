@@ -667,6 +667,8 @@ CMD_NOTES = {
     "tools": ("Prints the tool table: kind, safety flags, what each tool binds to and where it came from.", "$ npx decree-harness tools --json"),
     "decisions": ("The team decisions the agent follows: ADRs, post-mortem lessons and rules from CLAUDE.md, AGENTS.md and Cursor rules. <code>list</code> (the default) shows them, <code>extract</code> re-reads the repo and keeps your statuses, <code>for</code> prints exactly what <code>get_decisions</code> returns for some paths, <code>confirm</code> makes proposed decisions live, and <code>supersede</code> retires one. Changes regenerate the harness when it was generated before.",
                   "$ npx decree-harness decisions\n$ npx decree-harness decisions for src/db/users.ts\n$ npx decree-harness decisions confirm rule-claude-md-never-write-raw-sql-outside-src\n$ npx decree-harness decisions supersede adr-0002-use-mongodb --by adr-0003-store-events-in-postgres"),
+    "mcp": ("Serves <code>get_decisions</code> over stdio from <code>decree.json</code> in the project root, for Claude Code, Cursor or any MCP client. Nothing to generate or build first. It re-reads <code>decree.json</code> on every call, so <code>decisions confirm</code> and <code>supersede</code> apply without a restart.",
+            "$ claude mcp add decree -- npx -y decree-harness mcp\n$ npx decree-harness mcp -C path/to/repo"),
     "schema": ("Prints the JSON schema for <code>decree.json</code>. decree also writes it to <code>.decree/schema.json</code> for editors.", "$ npx decree-harness schema > decree.schema.json"),
 }
 
@@ -676,7 +678,7 @@ def page_commands():
 {h2("Global options")}
 {code(g, "text", "decree-harness --help", copy=False)}
 '''
-    for c in ["init", "scan", "plan", "generate", "refine", "chat", "run", "eval", "doctor", "tools", "decisions", "schema"]:
+    for c in ["init", "scan", "plan", "generate", "refine", "chat", "run", "eval", "doctor", "tools", "decisions", "mcp", "schema"]:
         note, ex = CMD_NOTES[c]
         helptxt = read(os.path.join(OUT, f"help-{c}.txt")).rstrip()
         body += f'''{h2(c, c, code_title=True)}
@@ -686,7 +688,7 @@ def page_commands():
 '''
     return doc_page("commands.html", "commands", "Commands",
                     "Every command and flag, taken from the CLI's own help output.", body,
-                    "decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, schema.")
+                    "decree-harness command reference: init, scan, plan, generate, refine, chat, run, eval, doctor, tools, decisions, mcp, schema.")
 
 DESC = {
  "$schema": "Path to the JSON schema. decree writes <code>./.decree/schema.json</code> so editors can validate and autocomplete.",

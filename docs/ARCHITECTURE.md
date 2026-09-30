@@ -33,25 +33,16 @@ coordinating: every module depends on them.
 | `.decree/runs/` | JSONL transcripts of `run`/`chat`/`eval` sessions. |
 | `agent/` (default out dir) | Generated targets: `agent/typescript`, `agent/python`, `agent/mcp-server`, `agent/claude-code`, plus `agent/README.md`, `agent/harness.md`, `agent/evals.json`, `agent/.env.example` and the `agent/.decree-generated` marker (see list_files / search below). |
 
-Outside the project, `login` writes `~/.config/decree/credentials.json`
-(`$DECREE_CONFIG_DIR` overrides the directory).
+## MCP server (`src/mcp/`)
 
-## Dashboard sync (`src/cloud/`)
-
-`login`, `push`, `whoami`, `logout` and `eval --push` talk to the dashboard's
-`/api/v1` routes (trydecree.com, or `$DECREE_API_URL`):
-
-| Route | Used by |
-|---|---|
-| `POST /api/v1/cli/login` `{ tokenHash, tokenPrefix, clientName }` | `login`: registers a locally made token by its sha256, returns a user code to approve in the browser |
-| `POST /api/v1/cli/login/poll` (bearer) | `login`: `pending` / `approved` / `denied` / `expired` |
-| `GET /api/v1/whoami` (bearer) | `whoami`, `login --token` |
-| `POST /api/v1/logout` (bearer) | `logout`: revokes the token |
-| `POST /api/v1/harnesses` (bearer) `{ spec, slug?, message?, git, source, cliVersion }` | `push`: a new version only when the spec changed |
-| `POST /api/v1/evals` (bearer) same + `evals: { summary, results, model, liveTools, filter?, durationMs }` | `eval --push` |
-
-`src/cloud/payload.ts` decides what leaves the machine (see README,
-"Dashboard sync"); tests use the fake server in `test/helpers/fake-decree.ts`.
+`decree-harness mcp` serves `get_decisions` over stdio (newline-delimited
+JSON-RPC 2.0, no SDK dependency) straight from `decree.json` in the project
+root. It re-reads the file on every call, so `decisions confirm` and
+`decisions supersede` apply without a restart, and it uses the same
+`runGetDecisions` as the runtime. It answers `initialize`, `ping`,
+`tools/list` and `tools/call`; a missing `decree.json` or bad arguments come
+back as tool errors (`isError: true`), unknown methods as JSON-RPC errors.
+stdout carries protocol messages only.
 
 ## Models
 
@@ -61,11 +52,7 @@ Outside the project, `login` writes `~/.config/decree/credentials.json`
 - Pricing per 1M tokens (input/output): opus-5 5/25, opus-5-5 4/20, fable-5-1 10/50, fable-5 10/50, opus-4-8/4-7/4-6 5/25,
   sonnet-5 2/10, sonnet-4-6 3/15, haiku-4-5 1/5. Cache reads 0.1x input, cache writes 1.25x input.
 
-Anthropic SDK reference docs (read these instead of guessing SDK shapes):
-`/tmp/claude-0/bundled-skills/2.1.283/aae5969f9aac2361136afc1396c8cb57/claude-api/`
-(`typescript/claude-api/*.md`, `python/claude-api/*.md`, `shared/tool-use-concepts.md`,
-`shared/agent-design.md`, `shared/prompt-caching.md`). The installed TS SDK is
-`@anthropic-ai/sdk@0.128` in `node_modules`; its `.d.ts` files are the final word.
+The TypeScript SDK is `@anthropic-ai/sdk@0.128` in `node_modules`; its `.d.ts` files are the final word.
 
 ## Tool semantics (runtime AND every generated target must match)
 
