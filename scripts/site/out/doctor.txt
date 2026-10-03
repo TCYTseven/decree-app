@@ -1,4 +1,4 @@
-T   decree  v0.1.0 · doctor
+T   decree  v0.1.1 · doctor
 |
 |  ✓ Node.js            v22.22.2
 |  ▲ Anthropic API key  not set

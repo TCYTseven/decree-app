@@ -182,7 +182,7 @@ describe("whoami / logout", () => {
     process.env.DECREE_TOKEN = token;
     expect(await cli("whoami")).toBe(1);
     expect(stderr).toContain("invalid or was revoked");
-    expect(stderr).toContain("login");
+    expect(stderr).toContain("login --url");
   });
 });
 

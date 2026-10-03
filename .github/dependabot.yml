@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # TypeScript 7 drops the JavaScript compiler API that the generator tests use (ts.transpileModule).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     groups:
       dev:
         dependency-type: development

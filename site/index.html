@@ -22,7 +22,7 @@
 <div id="live" class="sr-only" aria-live="polite"></div>
 <header class="site-header">
   <div class="container header-inner">
-    <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><circle cx="16" cy="16" r="10.5" fill="none" stroke="var(--accent-fg)" stroke-width="1.5" stroke-dasharray="2.2 2.2"/><path d="M11.5 16.4l3.1 3.1 6-6.6" fill="none" stroke="var(--accent-fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>decree</span><span class="brand-tag">v0.1.0</span></a>
+    <a class="brand" href="index.html"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--accent)"/><circle cx="16" cy="16" r="10.5" fill="none" stroke="var(--accent-fg)" stroke-width="1.5" stroke-dasharray="2.2 2.2"/><path d="M11.5 16.4l3.1 3.1 6-6.6" fill="none" stroke="var(--accent-fg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>decree</span><span class="brand-tag">v0.1.1</span></a>
     <nav class="nav" aria-label="Primary">
       <a href="docs/index.html">Docs</a>
       <a href="docs/commands.html" class="nav-hide-sm">Commands</a>
@@ -36,7 +36,7 @@
 <section class="hero" aria-labelledby="hero-title">
   <div class="container hero-grid">
     <div>
-      <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Open source CLI · MIT · v0.1.0</p>
+      <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Open source CLI · MIT · v0.1.1</p>
       <h1 id="hero-title" class="display">An agent harness for your codebase, in <em>one command</em>.</h1>
       <p class="lede">decree scans your repo, then writes a system prompt, tools bound to the endpoints and scripts that actually exist, subagents, guardrails and evals. You get runnable TypeScript, Python, an MCP server and Claude Code config, all generated from one file you can edit.</p>
       <div class="hero-actions">
@@ -62,11 +62,11 @@
       <button type="button" class="term-replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Replay</button>
     </div>
     <div class="term-body" tabindex="0" role="region" aria-label="Terminal output"><pre id="term-init" role="tabpanel" aria-labelledby="term-init-tab"><span class="ln"><span class="t-g">❯</span> <span class="t-cmd" data-type>npx decree-harness init --yes --offline --targets all</span>
-</span><span class="ln"><span class="t-r">T</span>   <span class="t-bold">decree</span>  <span class="t-dim">v0.1.0 · agent harness generator</span>
+</span><span class="ln"><span class="t-r">T</span>   <span class="t-bold">decree</span>  <span class="t-dim">v0.1.1 · agent harness generator</span>
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln"><span class="t-g">o</span>  Project demo .
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln" data-pause="420"><span class="t-g">*</span>  Scanned acme-orders · 16 files <span class="t-dim">75ms</span>
+</span><span class="ln" data-pause="420"><span class="t-g">*</span>  Scanned acme-orders · 16 files <span class="t-dim">70ms</span>
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln"><span class="t-g">o</span>  Found in acme-orders <span class="t-dim">-------------------------------</span><span class="t-dim">+</span>
 </span><span class="ln"><span class="t-dim">|</span>                                                      |
@@ -82,7 +82,7 @@
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln" data-pause="300"><span class="t-b">•</span>  Goal <span class="t-dim">›</span> Operate the orders API and triage test failures
 </span><span class="ln"><span class="t-dim">|</span>
-</span><span class="ln" data-pause="650"><span class="t-g">*</span>  Planned Acme Orders Agent · 18 tools · 0 subagents · 12 evals <span class="t-dim">37ms</span>
+</span><span class="ln" data-pause="650"><span class="t-g">*</span>  Planned Acme Orders Agent · 18 tools · 0 subagents · 12 evals <span class="t-dim">39ms</span>
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln"><span class="t-dim">|</span>  Acme Orders Agent (acme-orders-agent)
 </span><span class="ln"><span class="t-dim">|</span>  Acme Orders Agent for acme-orders (Acme orders service: REST API for orders and customers):
@@ -184,7 +184,7 @@
 </span><span class="ln"><span class="t-dim">└─────────────────────┴────────────┴─────────────────────────────┘</span>
 </span><span class="ln"> <span class="t-g">● read-only</span>   ◆ writes   ■ destructive, asks first
 </span><span class="ln"><span class="t-g">❯</span> <span class="t-caret"></span></span></pre><pre id="term-doctor" role="tabpanel" aria-labelledby="term-doctor-tab" hidden><span class="ln"><span class="t-g">❯</span> <span class="t-cmd" data-type>npx decree-harness doctor</span>
-</span><span class="ln"><span class="t-r">T</span>   <span class="t-bold">decree</span>  <span class="t-dim">v0.1.0 · doctor</span>
+</span><span class="ln"><span class="t-r">T</span>   <span class="t-bold">decree</span>  <span class="t-dim">v0.1.1 · doctor</span>
 </span><span class="ln"><span class="t-dim">|</span>
 </span><span class="ln" data-pause="250"><span class="t-dim">|</span>  <span class="t-g">✓</span> Node.js            v22.22.2
 </span><span class="ln" data-pause="120"><span class="t-dim">|</span>  <span class="t-a">▲</span> Anthropic API key  not set
@@ -199,7 +199,7 @@
 </span><span class="ln" data-pause="250"><span class="t-dim">—</span>  OK with 2 warnings
 </span><span class="ln"><span class="t-g">❯</span> <span class="t-caret"></span></span></pre></div>
   </div>
-  <figcaption class="term-caption">Real output from decree-harness 0.1.0 on <a href="https://github.com/TCYTseven/decree-app/tree/main/test/fixtures/express-openapi">test/fixtures/express-openapi</a>, an Express + OpenAPI orders service. Offline planner, no API key. Local paths removed.</figcaption>
+  <figcaption class="term-caption">Real output from decree-harness 0.1.1 on <a href="https://github.com/TCYTseven/decree-app/tree/main/test/fixtures/express-openapi">test/fixtures/express-openapi</a>, an Express + OpenAPI orders service. Offline planner, no API key. Local paths removed.</figcaption>
 </figure>
   </div>
 </section>

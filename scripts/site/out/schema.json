@@ -645,7 +645,7 @@
           ]
         },
         "decreeVersion": {
-          "default": "0.1.0",
+          "default": "0.1.1",
           "description": "decree-harness version that wrote the spec.",
           "type": "string"
         },

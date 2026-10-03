@@ -12,7 +12,8 @@ export class CloudError extends CliError {
   }
 }
 
-const LOGIN_HINT = "Run `decree login` again (or check DECREE_TOKEN).";
+/** Server hints predate self-hosting and say `decree login`, which now needs --url; 401s get this one instead. */
+const LOGIN_HINT = "Run `npx decree-harness login --url <your dashboard>` again (in CI, check DECREE_TOKEN and DECREE_API_URL).";
 
 /** A new API token: `dk_` + 48 hex chars. Only its sha256 is ever sent until approved. */
 export function newToken(): string {
@@ -73,7 +74,7 @@ export async function cloudRequest<T>(apiUrl: string, route: string, opts: Reque
   if (!res.ok) {
     const body = (json && typeof json === "object" ? json : {}) as { error?: unknown; hint?: unknown };
     const message = typeof body.error === "string" ? body.error : `${hostOf(apiUrl)} answered HTTP ${res.status}.`;
-    const hint = typeof body.hint === "string" ? body.hint : res.status === 401 ? LOGIN_HINT : undefined;
+    const hint = res.status === 401 ? LOGIN_HINT : typeof body.hint === "string" ? body.hint : undefined;
     throw new CloudError(message, { hint, status: res.status });
   }
   if (json === undefined) {

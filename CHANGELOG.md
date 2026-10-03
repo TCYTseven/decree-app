@@ -6,6 +6,10 @@ All notable changes to decree-harness are listed here. The format follows
 
 ## Unreleased
 
+## 0.1.1
+
+First version published to npm (0.1.0 was tagged but never published).
+
 ### Added
 
 - `decree-harness mcp`: serves `get_decisions` from `decree.json` over stdio
@@ -18,6 +22,12 @@ All notable changes to decree-harness are listed here. The format follows
   dashboard you host yourself. trydecree.com doesn't host dashboards yet, so
   there is no default URL: pass `login --url <dashboard>` or set
   `DECREE_API_URL`. Everything else runs locally with no account.
+
+### Fixed
+
+- A rejected or revoked token now says to run `login --url <your dashboard>`
+  instead of the dashboard's older `decree login` hint, which fails without a
+  URL.
 
 ## 0.1.0
 

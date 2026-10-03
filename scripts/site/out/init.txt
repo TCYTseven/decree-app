@@ -1,8 +1,8 @@
-T   decree  v0.1.0 · agent harness generator
+T   decree  v0.1.1 · agent harness generator
 |
 o  Project demo .
 |
-*  Scanned acme-orders · 16 files 75ms
+*  Scanned acme-orders · 16 files 70ms
 |
 o  Found in acme-orders -------------------------------+
 |                                                      |
@@ -18,7 +18,7 @@ o  Found in acme-orders -------------------------------+
 |
 •  Goal › Operate the orders API and triage test failures
 |
-*  Planned Acme Orders Agent · 18 tools · 0 subagents · 12 evals 37ms
+*  Planned Acme Orders Agent · 18 tools · 0 subagents · 12 evals 39ms
 |
 |  Acme Orders Agent (acme-orders-agent)
 |  Acme Orders Agent for acme-orders (Acme orders service: REST API for orders and customers):

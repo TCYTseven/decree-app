@@ -6,7 +6,7 @@ SITE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "sit
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
 DEMO_DECREE = os.path.join(OUT, "demo-decree.json")
 GH = "https://github.com/TCYTseven/decree-app"
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 
 def esc(s): return html.escape(s, quote=False)
 def attr(s): return html.escape(s, quote=True)

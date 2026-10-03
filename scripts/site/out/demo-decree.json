@@ -821,8 +821,8 @@
   ],
   "provenance": {
     "generator": "heuristic",
-    "decreeVersion": "0.1.0",
-    "createdAt": "2026-09-28T22:37:22.508Z",
+    "decreeVersion": "0.1.1",
+    "createdAt": "2026-10-03T05:28:24.875Z",
     "profileName": "acme-orders",
     "notes": [
       "HTTP tools read their base URL from ACME_ORDERS_BASE_URL (default http://localhost:3000); auth: bearer token from ACME_API_TOKEN.",
