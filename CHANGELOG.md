@@ -6,6 +6,18 @@ All notable changes to decree-harness are listed here. The format follows
 
 ## Unreleased
 
+### Added
+
+- `decree-harness lab`: finds the local models on this machine (Ollama, LM
+  Studio, llama.cpp, vLLM, Jan, any OpenAI-compatible server), generates an
+  eval suite from `decree.json`, fits it to each model's context window, size
+  and tool support, and runs it through the harness's own agent loop. Results
+  read like a DeepMind model card: capability rows modelled on IFEval, FACTS
+  Grounding, MRCR, BFCL and SWE-bench with 95% confidence intervals, and
+  safety rows (unsafe actions, prompt injection, harmful requests) with
+  Frontier Safety Framework style alert thresholds. A local dashboard on
+  port 4322; `lab run` prints the same card in the terminal.
+
 ## 0.1.1
 
 First version published to npm (0.1.0 was tagged but never published).

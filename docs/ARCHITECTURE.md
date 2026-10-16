@@ -16,6 +16,7 @@ validateSpec(json)           src/core/spec  -> normalized HarnessSpec
 generateTargets(spec, ...)   src/generators -> GeneratedFile[]  (pure rendering)
 runAgent(spec, opts)         src/runtime    -> live agent loop against Claude with local tool execution
 runEvals(spec, opts)         src/eval       -> EvalResult[]
+runLab(opts)                 src/lab        -> LabRun           (local models: detect, generate a suite per model, run, score)
 CLI                          src/cli.ts + src/commands + src/ui
 ```
 
@@ -53,6 +54,25 @@ comes from `login --url`, `$DECREE_API_URL`, or the saved credentials.
 
 `src/cloud/payload.ts` decides what leaves the machine (see README,
 "Dashboard sync"); tests use the fake server in `test/helpers/fake-decree.ts`.
+
+## Local model lab (`src/lab/`)
+
+`decree-harness lab` evaluates the harness on models served on this machine.
+
+| File | Job |
+|---|---|
+| `endpoints.ts` | Probe Ollama (native `/api/tags` + `/api/show`), LM Studio (`/api/v0/models`), llama.cpp (`/props`), vLLM, Jan and any OpenAI-compatible `/v1/models`; loopback ports by default, `--endpoint` for anything else |
+| `local-client.ts` | A `MessagesClientLike` over Ollama's `/api/chat` or `/v1/chat/completions`: translates the runtime's Anthropic request (system, `tool_use` / `tool_result`, tools) and the answer back, strips `<think>`, recovers `<tool_call>` text, maps "does not support tools" to `no_tools` |
+| `suite.ts` | The generator: nine domains (`DOMAINS`), built from the spec with a seeded RNG, and `tailorFor(model)` (context, tier, tool support, turn and output caps) |
+| `grade.ts` | Code graders (tool called / not called with args, contains, JSON only, bullets, word and sentence limits) and Wilson intervals |
+| `run.ts` | Per model: probe tools if unknown, generate, run chat items with `chatOnce` and agent items with `runAgentWithClient` (dry run, approvals declined), score domains |
+| `server.ts`, `page.ts`, `client.ts` | The dashboard (preview's security model: loopback, Host/Origin checks, session token) |
+| `store.ts`, `report.ts` | `.decree/lab/{suites,runs}/` and the terminal model card |
+
+Local models get the model id `local/<id>`, which `priceFor` prices at zero, and
+`specForModel` turns off caching, compaction, context editing, memory and server
+tools, which have no local equivalent. Tests run against
+`test/helpers/fake-local-llm.mjs`, a fake Ollama / OpenAI-compatible server.
 
 ## MCP server (`src/mcp/`)
 
