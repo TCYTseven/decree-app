@@ -25,12 +25,17 @@ export const PRICES: ReadonlyArray<readonly [prefix: string, price: ModelPrice]>
 
 const DEFAULT_PRICE: ModelPrice = { input: 5, output: 25 }; // opus-5
 
+/** Model ids the lab gives local models, e.g. "local/qwen3:8b". */
+export const LOCAL_MODEL_PREFIX = "local/";
+
 export const CACHE_READ_MULTIPLIER = 0.1;
 export const CACHE_WRITE_MULTIPLIER = 1.25;
 
 /** Price for a model id (prefix match; unknown models fall back to claude-opus-5 prices). */
 export function priceFor(model: string): ModelPrice {
   const id = (model ?? "").trim().toLowerCase();
+  // Models served on this machine (`decree-harness lab`) cost nothing per token.
+  if (id.startsWith(LOCAL_MODEL_PREFIX)) return { input: 0, output: 0 };
   for (const [prefix, price] of PRICES) {
     if (id === prefix || id.startsWith(prefix)) {
       // Guard against "claude-opus-5" matching "claude-opus-50" style ids: next char must be a separator or end.
