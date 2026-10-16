@@ -15,6 +15,7 @@ const EXAMPLES: [string, string][] = [
   ["decisions for src/db", "decisions that apply to a path"],
   ["eval --filter orders", "run a subset of the evals"],
   ["mcp", "serve decisions over MCP"],
+  ["lab", "eval your local models (Ollama, LM Studio…)"],
 ];
 
 /** Examples block, laid out for the terminal width (description beside or above each command). */
@@ -224,6 +225,49 @@ export function buildProgram(): Command {
     .option("--no-open", "don't open the browser")
     .option("--api-key <key>", "Anthropic API key for the playground and evals")
     .action((opts, cmd) => import("./preview.js").then((m) => m.previewCommand(opts, cmd)));
+
+  const labEndpoint = (cmd: Command) =>
+    cmd.option("-e, --endpoint <url...>", "also probe this server (any OpenAI-compatible or Ollama URL; repeatable)");
+  const lab = program
+    .command("lab")
+    .description("generate evals for this harness and run them on your local models (Ollama, LM Studio, llama.cpp, vLLM…)");
+  labEndpoint(
+    lab
+      .command("serve", { isDefault: true })
+      .description("open the local lab dashboard: pick models, inspect the generated suite, run it")
+      .option("-p, --port <port>", "port to listen on (a free one is picked if taken)", "4322")
+      .option("--host <host>", "interface to bind (keep 127.0.0.1 unless you know why)", "127.0.0.1")
+      .option("--max-context <tokens>", "cap for long-context items (default 16384)")
+      .option("--no-open", "don't open the browser"),
+  ).action((opts, cmd) => import("./lab.js").then((m) => m.labServeCommand(opts, cmd)));
+  labEndpoint(
+    lab
+      .command("run")
+      .description("run the generated suite in the terminal and print a model card")
+      .option("--models <list>", "comma-separated model ids or substrings (default: every model found)")
+      .option("--samples <n>", "trials per item; scores average over them (default 1)")
+      .option("--domains <list>", "only these domains, or capability / safety")
+      .option("--temperature <t>", "sampling temperature (default 0, or 0.7 with --samples > 1)")
+      .option("--max-context <tokens>", "cap for long-context items (default 16384)")
+      .option("--timeout <seconds>", "per-request timeout (default 300)")
+      .option("--fail-on-alert", "exit 2 when a safety domain crosses its alert threshold")
+      .option("--json", "print the full run as JSON"),
+  ).action((opts, cmd) => import("./lab.js").then((m) => m.labRunCommand(opts, cmd)));
+  labEndpoint(
+    lab
+      .command("models")
+      .description("list the local models decree can find")
+      .option("--json", "print as JSON"),
+  ).action((opts, cmd) => import("./lab.js").then((m) => m.labModelsCommand(opts, cmd)));
+  labEndpoint(
+    lab
+      .command("generate")
+      .description("write the eval suite fitted to each local model to .decree/lab/suites/ without running it")
+      .option("--models <list>", "comma-separated model ids or substrings")
+      .option("--domains <list>", "only these domains, or capability / safety")
+      .option("--max-context <tokens>", "cap for long-context items (default 16384)")
+      .option("--json", "print what was written as JSON"),
+  ).action((opts, cmd) => import("./lab.js").then((m) => m.labGenerateCommand(opts, cmd)));
 
   program
     .command("login")
