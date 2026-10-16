@@ -21,6 +21,11 @@ export {
   type ScopeOptions,
 } from "./decisions/index.js";
 export { runEvals, type EvalOptions } from "./eval/index.js";
+export { detectLocalModels, type LocalModel, type DetectedServer } from "./lab/endpoints.js";
+export { createLocalClient, type LocalClientOptions } from "./lab/local-client.js";
+export { generateSuite, tailorFor, DOMAINS as LAB_DOMAINS } from "./lab/suite.js";
+export { runLab, runModel, type LabRunOptions } from "./lab/run.js";
+export type { LabRun, LabSuite, ModelRun, DomainScore, Tailoring } from "./lab/types.js";
 export { serveMcp, handleRequest as handleMcpRequest, type McpServerOptions } from "./mcp/server.js";
 export { validateSpec, specJsonSchema } from "./core/spec.js";
 export { createLLM, resolveApiKey, MissingApiKeyError } from "./llm/client.js";
